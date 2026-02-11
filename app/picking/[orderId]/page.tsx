@@ -47,6 +47,8 @@ export default function PickingPage() {
     router.push('/')
   }
 
+  const currentTask = pendingTasks[0]
+
   return (
     <div className="min-h-screen bg-background pb-40">
       {/* Header */}
@@ -89,33 +91,26 @@ export default function PickingPage() {
 
       {/* Content */}
       <main className="px-4 py-6">
-        {/* Pending Tasks */}
-        {pendingTasks.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold text-foreground">
-              Pick Tasks ({pendingTasks.length} remaining)
-            </h2>
-            {pendingTasks.map((task, index) => (
-              <Card
-                key={task.id}
-                className={cn(
-                  'border-2 shadow-lg',
-                  index === 0 && 'border-accent ring-2 ring-accent/20'
-                )}
-              >
+        {/* Two-Column Layout for Current Task */}
+        {currentTask && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[30%_70%]">
+            {/* Left Column - Current Item to Pick */}
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-foreground">
+                Current Item to Pick
+              </h2>
+              <Card className="border-2 border-accent shadow-lg ring-2 ring-accent/20">
                 <CardContent className="space-y-4 p-6">
                   {/* Task Number & Location */}
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-3">
                       <div className="flex items-center gap-2">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
-                          {task.sequence}
+                          {currentTask.sequence}
                         </div>
-                        {index === 0 && (
-                          <Badge className="bg-accent text-accent-foreground">
-                            Next
-                          </Badge>
-                        )}
+                        <Badge className="bg-accent text-accent-foreground">
+                          Active
+                        </Badge>
                       </div>
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 text-muted-foreground">
@@ -123,7 +118,7 @@ export default function PickingPage() {
                           <span className="text-sm font-medium">Location</span>
                         </div>
                         <p className="text-4xl font-bold leading-tight text-foreground">
-                          {task.location}
+                          {currentTask.location}
                         </p>
                       </div>
                     </div>
@@ -134,10 +129,10 @@ export default function PickingPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 space-y-1">
                         <p className="text-lg font-bold text-foreground">
-                          {task.productName}
+                          {currentTask.productName}
                         </p>
                         <p className="text-sm font-medium text-muted-foreground">
-                          SKU: {task.sku}
+                          SKU: {currentTask.sku}
                         </p>
                       </div>
                       <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-background">
@@ -151,14 +146,14 @@ export default function PickingPage() {
                         Quantity
                       </span>
                       <span className="text-4xl font-bold text-foreground">
-                        {task.quantity}×
+                        {currentTask.quantity}×
                       </span>
                     </div>
                   </div>
 
                   {/* Action Button */}
                   <Button
-                    onClick={() => handleMarkPicked(task.id)}
+                    onClick={() => handleMarkPicked(currentTask.id)}
                     size="lg"
                     className="h-16 w-full bg-accent text-lg font-bold text-accent-foreground hover:bg-accent/90"
                   >
@@ -167,8 +162,54 @@ export default function PickingPage() {
                   </Button>
                 </CardContent>
               </Card>
-            ))}
+
+              {/* Remaining Tasks Counter */}
+              {pendingTasks.length > 1 && (
+                <div className="rounded-lg border border-border bg-card p-4">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    {pendingTasks.length - 1} more {pendingTasks.length - 1 === 1 ? 'item' : 'items'} remaining
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column - 3D Pallet Visualization */}
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-foreground">
+                Pallet Visualization
+              </h2>
+              <Card className="border-2 shadow-lg">
+                <CardContent className="p-6">
+                  <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-muted">
+                    <div className="text-center space-y-2">
+                      <Package className="mx-auto h-16 w-16 text-muted-foreground" />
+                      <p className="text-lg font-semibold text-muted-foreground">
+                        3D Pallet View
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Coming soon...
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
+        )}
+
+        {/* No Current Task - All Picked */}
+        {!currentTask && allPicked && (
+          <Card className="border-2 border-accent shadow-lg">
+            <CardContent className="p-8 text-center">
+              <CheckCircle2 className="mx-auto h-16 w-16 text-accent" />
+              <h2 className="mt-4 text-2xl font-bold text-foreground">
+                All Items Picked!
+              </h2>
+              <p className="mt-2 text-muted-foreground">
+                You can now finish this order.
+              </p>
+            </CardContent>
+          </Card>
         )}
 
         {/* Picked Tasks */}
@@ -177,22 +218,21 @@ export default function PickingPage() {
             <h2 className="text-lg font-bold text-muted-foreground">
               Completed ({pickedTasks.length})
             </h2>
-            {pickedTasks.map((task) => (
-              <Card key={task.id} className="border border-border bg-muted/50">
-                <CardContent className="flex items-center gap-4 p-4">
-                  <CheckCircle2 className="h-8 w-8 shrink-0 text-accent" />
-                  <div className="flex-1 space-y-1">
-                    <p className="font-bold text-foreground">{task.location}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {task.productName} • {task.quantity}×
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="shrink-0">
-                    Picked
-                  </Badge>
-                </CardContent>
-              </Card>
-            ))}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {pickedTasks.map((task) => (
+                <Card key={task.id} className="border border-border bg-muted/50">
+                  <CardContent className="flex items-center gap-4 p-4">
+                    <CheckCircle2 className="h-8 w-8 shrink-0 text-accent" />
+                    <div className="flex-1 space-y-1 min-w-0">
+                      <p className="font-bold text-foreground truncate">{task.location}</p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {task.productName} • {task.quantity}×
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
       </main>
