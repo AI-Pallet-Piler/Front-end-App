@@ -8,7 +8,21 @@ import { Badge } from '@/components/ui/badge'
 import { BottomNav } from '@/components/bottom-nav'
 import { useWarehouseStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
+
+// Dynamically import PalletViewer to avoid SSR issues with Three.js
+const PalletViewer = dynamic(() => import('@/components/pallet-viewer'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center bg-muted">
+      <div className="text-center space-y-2">
+        <Package className="mx-auto h-16 w-16 animate-pulse text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Loading 3D view...</p>
+      </div>
+    </div>
+  ),
+})
 
 export default function PickingPage() {
   const params = useParams()
@@ -19,6 +33,20 @@ export default function PickingPage() {
   const markTaskPicked = useWarehouseStore((state) => state.markTaskPicked)
 
   const order = orders.find((o) => o.id === orderId)
+  const [palletData, setPalletData] = useState<any>(null)
+
+  // Load mock pallet data
+  useEffect(() => {
+    fetch('/mock-pallet-data.json')
+      .then((res) => res.json())
+      .then((data) => {
+        // Get the first pallet from the array
+        if (data && data.length > 0) {
+          setPalletData(data[0])
+        }
+      })
+      .catch((err) => console.error('Failed to load pallet data:', err))
+  }, [])
 
   useEffect(() => {
     if (!order) {
@@ -179,17 +207,13 @@ export default function PickingPage() {
                 Pallet Visualization
               </h2>
               <Card className="border-2 shadow-lg">
-                <CardContent className="p-6">
-                  <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-muted">
-                    <div className="text-center space-y-2">
-                      <Package className="mx-auto h-16 w-16 text-muted-foreground" />
-                      <p className="text-lg font-semibold text-muted-foreground">
-                        3D Pallet View
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Coming soon...
-                      </p>
-                    </div>
+                <CardContent className="p-0">
+                  <div className="aspect-square w-full rounded-lg overflow-hidden">
+                    <PalletViewer
+                      palletData={palletData}
+                      highlightedItemId={currentTask?.id}
+                      onItemClick={(itemId) => console.log('Clicked item:', itemId)}
+                    />
                   </div>
                 </CardContent>
               </Card>
