@@ -146,30 +146,6 @@ export default function LoginPage() {
                 {isLoading ? 'Signing In...' : 'Sign In'}
               </Button>
 
-              {/* Divider */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="bg-card px-4 text-muted-foreground font-medium">
-                    OR
-                  </span>
-                </div>
-              </div>
-
-              {/* Scan Badge Button */}
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="h-16 w-full text-lg font-semibold"
-                onClick={handleScanBadge}
-                disabled={isLoading}
-              >
-                <Scan className="mr-3 h-6 w-6" />
-                Scan Badge
-              </Button>
             </form>
           </CardContent>
         </Card>
