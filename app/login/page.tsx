@@ -9,6 +9,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
+console.log('API_BASE_URL:', process.env.NEXT_PUBLIC_API_URL)
+
 export default function LoginPage() {
   const router = useRouter()
   const [pickerId, setPickerId] = useState('')
@@ -33,23 +36,41 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/auth/login', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ pickerId })
-      // })
+      // Call the backend API to verify picker exists
+      const response = await fetch(`${API_BASE_URL}/users/badge/${pickerId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      })
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800))
+      if (!response.ok) {
+        if (response.status === 404) {
+          setError('Picker ID not found. Please check and try again.')
+        } else {
+          setError('Login failed. Please try again.')
+        }
+        setIsLoading(false)
+        return
+      }
 
-      // Store picker ID (you can use localStorage, cookies, or your state management)
+      const userData = await response.json()
+
+      // Verify the user is a picker
+      if (userData.role !== 'picker') {
+        setError('This badge is not registered as a picker.')
+        setIsLoading(false)
+        return
+      }
+
+      // Store picker information
       localStorage.setItem('pickerId', pickerId)
+      localStorage.setItem('pickerName', userData.name)
+      localStorage.setItem('pickerEmail', userData.email)
 
       // Redirect to dashboard
       router.push('/')
     } catch (err) {
-      setError('Login failed. Please try again.')
+      console.error('Login error:', err)
+      setError('Unable to connect to server. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -110,7 +131,7 @@ export default function LoginPage() {
                   disabled={isLoading}
                 />
                 <p className="text-sm text-muted-foreground">
-                  Example: PICK001, PICK042, etc.
+                  Example: PICK0001, PICK0042, etc.
                 </p>
               </div>
 
@@ -123,6 +144,31 @@ export default function LoginPage() {
               >
                 <LogIn className="mr-3 h-6 w-6" />
                 {isLoading ? 'Signing In...' : 'Sign In'}
+              </Button>
+
+              {/* Divider */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="bg-card px-4 text-muted-foreground font-medium">
+                    OR
+                  </span>
+                </div>
+              </div>
+
+              {/* Scan Badge Button */}
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="h-16 w-full text-lg font-semibold"
+                onClick={handleScanBadge}
+                disabled={isLoading}
+              >
+                <Scan className="mr-3 h-6 w-6" />
+                Scan Badge
               </Button>
             </form>
           </CardContent>
