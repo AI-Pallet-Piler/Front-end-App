@@ -7,9 +7,18 @@ import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { BottomNav } from '@/components/bottom-nav'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function SettingsPage() {
   const [brightness, setBrightness] = useState(true)
+  const router = useRouter()
+
+  const handleSwitchUser = () => {
+    // Clear current user session
+    localStorage.removeItem('pickerId')
+    // Navigate to login page
+    router.push('/login')
+  }
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -124,6 +133,7 @@ export default function SettingsPage() {
               variant="outline"
               size="lg"
               className="h-16 w-full justify-start text-lg font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground bg-transparent"
+              onClick={handleSwitchUser}
             >
               <LogOut className="mr-3 h-6 w-6" />
               Switch User
