@@ -1,157 +1,154 @@
-# WarePick - Warehouse Picking PWA
+# Warehouse Picking App
 
-Professional warehouse order picking instructions app built with Next.js 14+, optimized for industrial environments.
+A modern warehouse picking application built with Next.js, featuring 3D pallet visualization and real-time task management.
 
-## Project Structure
+## 🚀 Getting Started
 
-```
-/
-├── app/
-│   ├── layout.tsx              # Root layout with PWA meta tags
-│   ├── page.tsx                # Dashboard - list of picking tasks
-│   ├── picking/
-│   │   └── [orderId]/
-│   │       └── page.tsx        # Order picking screen with task list
-│   └── settings/
-│       └── page.tsx            # Settings & device info
-│
-├── components/
-│   ├── bottom-nav.tsx          # Sticky bottom navigation bar
-│   ├── pwa-init.tsx            # PWA initialization component
-│   └── ui/                     # shadcn/ui components
-│
-├── lib/
-│   ├── store.ts                # Zustand store with mock data
-│   ├── register-sw.ts          # Service worker registration
-│   └── utils.ts                # Utility functions
-│
-└── public/
-    ├── manifest.json           # PWA manifest
-    └── sw.js                   # Service worker for offline support
+### Install Dependencies
+```bash
+npm install
 ```
 
-## Features Implemented
-
-### ✅ Dashboard (Home Screen)
-- Large, touch-friendly order cards (min 56-64px buttons)
-- Order number, customer, total lines/items display
-- Progress tracking for in-progress orders
-- "Start" / "Continue" buttons with clear CTAs
-- Empty state when no tasks assigned
-
-### ✅ Order Picking Screen
-- Sequential pick task list with optimal ordering
-- Extra large location codes (easy to read from distance)
-- Product info: name, SKU, quantity
-- Visual task sequence indicators
-- "Mark as Picked" action buttons with vibration feedback
-- Progress bar showing completion status
-- Completed tasks section
-- Sticky bottom action bar with "Finish Order" button
-
-### ✅ Settings Screen
-- Device information display
-- High brightness mode toggle
-- Placeholder for upcoming pallet building feature
-- Help & Support access
-- Switch User action
-
-### ✅ PWA Features
-- Installable on device home screen
-- Offline-ready with service worker
-- Portrait-optimized for tablets/handhelds
-- Theme color for status bar
-- App shortcuts for quick access
-
-### ✅ UX Optimizations
-- High contrast industrial theme (dark blue-gray + green accents)
-- Extra large touch targets (56-64px minimum)
-- Vibration feedback on pick confirmation
-- Readable from 1-2 meters away
-- Optimized for gloved hands
-- Mobile-first, portrait layout
-
-## Design System
-
-### Color Palette
-- **Primary**: Deep industrial blue (#2d3e50 approx)
-- **Accent**: Vibrant green for actions/success
-- **Warning**: Bright orange for alerts
-- **Neutral**: Cool grays for backgrounds
-
-### Typography
-- **Font**: Geist (sans-serif) for clarity
-- **Sizes**: Large text throughout (18px+ for body, 24-48px for key info)
-- **Weight**: Bold for important information
-
-### Touch Targets
-- Buttons: 56-64px height minimum
-- Generous padding and spacing
-- Large interactive areas
-
-## State Management
-
-Using Zustand for simple, performant state:
-
-```typescript
-interface WarehouseStore {
-  orders: Order[]
-  activeOrderId: string | null
-  setActiveOrder: (orderId: string | null) => void
-  markTaskPicked: (orderId: string, taskId: string) => void
-  completeOrder: (orderId: string) => void
-}
+### Run Development Server
+```bash
+npm run dev
 ```
 
-## Mock Data
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-The app includes 3 mock orders with 3-8 pick tasks each:
-- Order 1: 8 tasks, 124 items (pending)
-- Order 2: 5 tasks, 67 items (in-progress)
-- Order 3: 3 tasks, 45 items (pending)
+### Build for Production
+```bash
+npm run build
+npm start
+```
 
-Mock products include industrial parts: bearings, brackets, hoses, filters, connectors, etc.
+## 📁 Project Structure
 
-## Device Support
+```
+├── app/                          # Next.js App Router (Routes/URLs)
+│   ├── page.tsx                  # Homepage → "/"
+│   ├── layout.tsx                # Root layout
+│   ├── globals.css               # Global styles
+│   ├── picking/[orderId]/        # Dynamic picking route
+│   │   └── page.tsx              # → "/picking/123"
+│   └── settings/                 # Settings route
+│       └── page.tsx              # → "/settings"
+│
+├── features/                     # Page Components (Business Logic)
+│   ├── home-page.tsx             # Home page with order list
+│   ├── picking-page.tsx          # Picking tasks with 3D viewer
+│   └── settings-page.tsx         # Settings and device info
+│
+├── components/                   # UI Components
+│   ├── navigation-bottom-bar.tsx # Bottom navigation bar
+│   ├── viewer-pallet-3d.tsx      # 3D pallet visualization
+│   ├── installer-pwa.tsx         # PWA installation
+│   ├── provider-theme.tsx        # Theme management
+│   └── ui/                       # Reusable UI components (13 essential)
+│       ├── badge.tsx             # Status badges
+│       ├── button.tsx            # Buttons
+│       ├── card.tsx              # Cards
+│       ├── input.tsx             # Text inputs
+│       ├── separator.tsx         # Dividers
+│       ├── sheet.tsx             # Side panels
+│       ├── skeleton.tsx          # Loading placeholders
+│       ├── switch.tsx            # Toggle switches
+│       ├── toast.tsx             # Toast notifications
+│       ├── toaster.tsx           # Toast container
+│       ├── toggle.tsx            # Toggle buttons
+│       ├── toggle-group.tsx      # Grouped toggles
+│       └── tooltip.tsx           # Tooltips
+│
+├── lib/                          # Utilities & Helpers
+│   ├── store.ts                  # Zustand state management
+│   ├── utils.ts                  # Helper functions
+│   ├── use-mobile.ts             # Mobile detection hook
+│   ├── use-toast.ts              # Toast notifications
+│   └── register-sw.ts            # Service worker
+│
+└── public/                       # Static Assets
+    ├── manifest.json             # PWA manifest
+    ├── mock-pallet-data.json     # 3D demo data
+    └── sw.js                     # Service worker
+```
 
-Optimized for:
-- Rugged tablets (8-10 inches)
-- Zebra-style handheld devices
-- iPads in industrial cases
-- Smartphones (360-800px wide, portrait)
+## 🎯 Key Features
 
-## Future Scope
+- **Order Management**: View and manage warehouse picking orders
+- **3D Pallet Visualization**: Interactive 3D view of pallet items using Three.js
+- **Task Tracking**: Step-by-step picking instructions with progress tracking
+- **PWA Support**: Works offline as a Progressive Web App
+- **Responsive Design**: Optimized for warehouse tablets and mobile devices
+- **Dark/Light Theme**: Theme support for different warehouse environments
 
-- [ ] 3D pallet building visualization
-- [ ] Real authentication/login
-- [ ] Backend API integration
-- [ ] Real-time task updates
-- [ ] Barcode scanning
-- [ ] Camera integration
-- [ ] Advanced offline sync
-- [ ] Multi-language support
+## 🛠️ Tech Stack
 
-## Usage
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: shadcn/ui + Radix UI
+- **3D Graphics**: Three.js + React Three Fiber
+- **State Management**: Zustand
+- **Icons**: Lucide React
 
-1. **Dashboard**: View all assigned picking tasks
-2. **Start Order**: Tap any order card to begin picking
-3. **Pick Tasks**: Follow the sequence, scan/pick items, mark as picked
-4. **Finish**: Complete all tasks and tap "Finish Order"
-5. **Settings**: Adjust display settings or switch user
+## 📝 How It Works
 
-## Development Notes
+### Routing
+- `app/` folder contains Next.js routing structure (file-based routing)
+- Each `page.tsx` file imports its logic from `features/` folder
+- Folder names define URLs:
+  - `app/` → `/`
+  - `app/settings/` → `/settings`
+  - `app/picking/[orderId]/` → `/picking/any-id` (dynamic route)
 
-- Uses Next.js 16 App Router
-- Tailwind CSS v4 for styling
-- Zustand for state management
-- PWA with service worker registration
-- Mobile-first responsive design
-- Optimized for portrait orientation
+### Page Components
+- `features/` contains all page logic and business components
+- Keeps routing (`app/`) separate from implementation (`features/`)
+- Clear separation between routes and business logic
 
-## Accessibility
+### UI Components
+- `components/` contains only reusable UI components
+- `components/ui/` has 13 essential base components from shadcn/ui
+- Component names use prefixes: `navigation-`, `viewer-`, `installer-`, `provider-`
+- Only includes components that are actively used in the app
 
-- High contrast mode friendly
-- Large, readable text
-- Clear visual hierarchy
-- Touch-optimized interactive elements
-- Semantic HTML structure
+### State Management
+- `lib/store.ts` uses Zustand for global state
+- Manages orders, tasks, and picking progress
+
+## 🧪 Development
+
+### Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+
+## 📱 PWA Features
+
+The app includes Progressive Web App capabilities:
+- Offline support via Service Worker
+- App manifest for installation
+- Optimized for tablet devices in warehouse environments
+
+## 🎨 Customization
+
+- **Theme**: Modify `app/globals.css` for colors and styles
+- **UI Components**: All essential components in `components/ui/` (cleaned to 13 files)
+- **Component Naming**: Descriptive prefixes (navigation-, viewer-, installer-, provider-)
+- **Mock Data**: Update `public/mock-pallet-data.json` for 3D testing
+
+## 📦 Project Organization
+
+**Key Principles:**
+- ✅ **Minimal Structure**: Only essential files and folders
+- ✅ **Clear Naming**: Descriptive file names with prefixes
+- ✅ **Separation of Concerns**: Routes, features, components, utilities clearly separated
+- ✅ **No Duplication**: Single source of truth for each component
+- ✅ **Production Ready**: Optimized for warehouse tablet deployment
+
+---
+
+**Version**: 0.1.0  
+**Built with**: Next.js, TypeScript, Tailwind CSS
