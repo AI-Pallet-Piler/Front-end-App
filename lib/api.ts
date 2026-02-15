@@ -141,3 +141,52 @@ export async function updateOrderLinePicked(
     throw error
   }
 }
+
+/**
+ * Pallet item interface for 3D visualization
+ */
+export interface PalletItem {
+  id: string
+  name: string
+  x: number
+  y: number
+  z: number
+  w: number
+  h: number
+  d: number
+  weight: number
+  tipped: boolean
+}
+
+/**
+ * Pallet data interface
+ */
+export interface PalletData {
+  pallet_id: number
+  items: PalletItem[]
+}
+
+/**
+ * Fetch pallet instructions for an order
+ */
+export async function fetchPalletInstructions(orderId: number): Promise<PalletData[]> {
+  console.log('[API] Fetching pallet instructions for order:', orderId)
+  try {
+    const response = await fetch(`${API_BASE_URL}/orders/${orderId}/pallet-instructions`)
+    console.log('[API] Pallet instructions response status:', response.status, response.statusText)
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Pallet instructions not generated yet. Please run the packing algorithm first.')
+      }
+      throw new Error(`Failed to fetch pallet instructions: ${response.statusText}`)
+    }
+    
+    const palletData = await response.json()
+    console.log('[API] Fetched pallet instructions:', palletData)
+    return palletData
+  } catch (error) {
+    console.error(`[API] Error fetching pallet instructions for order ${orderId}:`, error)
+    throw error
+  }
+}

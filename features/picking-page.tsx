@@ -10,6 +10,7 @@ import { useWarehouseStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { fetchPalletInstructions, PalletData } from '@/lib/api'
 
 // Dynamically import PalletViewer to avoid SSR issues with Three.js
 const PalletViewer = dynamic(() => import('@/components/viewer-pallet-3d'), {
@@ -35,7 +36,9 @@ export default function PickingPage() {
   const markTaskPicked = useWarehouseStore((state) => state.markTaskPicked)
 
   const order = orders.find((o) => o.id === orderId)
-  const [palletData, setPalletData] = useState<any>(null)
+  const [palletData, setPalletData] = useState<PalletData | null>(null)
+  const [palletError, setPalletError] = useState<string | null>(null)
+  const [loadingPallet, setLoadingPallet] = useState(false)
 
   // Load orders on mount if not already loaded
   useEffect(() => {
@@ -45,18 +48,39 @@ export default function PickingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders.length, isLoading])
 
-  // Load mock pallet data
+  // Load pallet instructions from API when order is available
   useEffect(() => {
-    fetch('/mock-pallet-data.json')
-      .then((res) => res.json())
-      .then((data) => {
-        // Get the first pallet from the array
-        if (data && data.length > 0) {
-          setPalletData(data[0])
+    if (!order) return
+
+    const loadPalletInstructions = async () => {
+      setLoadingPallet(true)
+      setPalletError(null)
+      
+      try {
+        // Extract numeric order ID from the order
+        const numericOrderId = parseInt(order.id, 10)
+        if (isNaN(numericOrderId)) {
+          throw new Error('Invalid order ID')
         }
-      })
-      .catch((err) => console.error('Failed to load pallet data:', err))
-  }, [])
+
+        const palletInstructions = await fetchPalletInstructions(numericOrderId)
+        
+        // Get the first pallet from the array (for now)
+        if (palletInstructions && palletInstructions.length > 0) {
+          setPalletData(palletInstructions[0])
+        } else {
+          setPalletError('No pallet data available')
+        }
+      } catch (error) {
+        console.error('Failed to load pallet instructions:', error)
+        setPalletError(error instanceof Error ? error.message : 'Failed to load pallet visualization')
+      } finally {
+        setLoadingPallet(false)
+      }
+    }
+
+    loadPalletInstructions()
+  }, [order])
 
   // Loading state
   if (isLoading) {
@@ -256,11 +280,32 @@ export default function PickingPage() {
               <Card className="border-2 shadow-lg">
                 <CardContent className="p-0">
                   <div className="aspect-square w-full rounded-lg overflow-hidden">
-                    <PalletViewer
-                      palletData={palletData}
-                      highlightedItemId={currentTask?.id}
-                      onItemClick={(itemId) => console.log('Clicked item:', itemId)}
-                    />
+                    {loadingPallet ? (
+                      <div className="flex h-full w-full items-center justify-center bg-muted">
+                        <div className="text-center space-y-2">
+                          <Package className="mx-auto h-16 w-16 animate-pulse text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Loading pallet visualization...</p>
+                        </div>
+                      </div>
+                    ) : palletError ? (
+                      <div className="flex h-full w-full items-center justify-center bg-muted p-6">
+                        <div className="text-center space-y-2">
+                          <AlertCircle className="mx-auto h-16 w-16 text-destructive" />
+                          <p className="text-sm font-semibold text-foreground">Visualization Not Available</p>
+                          <p className="text-xs text-muted-foreground">{palletError}</p>
+                        </div>
+                      </div>
+                    ) : palletData ? (
+                      <PalletViewer
+                        palletData={palletData}
+                        highlightedItemId={currentTask?.id}
+                        onItemClick={(itemId) => console.log('Clicked item:', itemId)}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-muted">
+                        <p className="text-sm text-muted-foreground">No pallet data</p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
