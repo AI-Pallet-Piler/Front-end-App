@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { fetchOrders, fetchInventoryBySku, type ApiOrder } from './api'
 
 export type PickTaskStatus = 'pending' | 'picked'
 
@@ -10,6 +11,7 @@ export interface PickTask {
   quantity: number
   status: PickTaskStatus
   sequence: number
+  orderLineId: number
 }
 
 export interface Order {
@@ -26,196 +28,95 @@ export interface Order {
 interface WarehouseStore {
   orders: Order[]
   activeOrderId: string | null
+  isLoading: boolean
+  error: string | null
   setActiveOrder: (orderId: string | null) => void
   markTaskPicked: (orderId: string, taskId: string) => void
   completeOrder: (orderId: string) => void
   resetOrders: () => void
+  loadOrders: () => Promise<void>
 }
 
-// Mock data
-const mockOrders: Order[] = [
-  {
-    id: '1',
-    orderNumber: 'WH-2024-001234',
-    customer: 'Distribution Center A',
-    totalLines: 8,
-    totalItems: 124,
-    pickedItems: 0,
-    status: 'pending',
-    tasks: [
-      {
-        id: 't1',
-        location: 'A-05-03-02',
-        productName: 'Industrial Bearing Set',
-        sku: 'BRG-5032',
-        quantity: 24,
-        status: 'pending',
-        sequence: 1,
-      },
-      {
-        id: 't2',
-        location: 'A-05-04-01',
-        productName: 'Steel Mounting Bracket',
-        sku: 'MTB-2041',
-        quantity: 48,
-        status: 'pending',
-        sequence: 2,
-      },
-      {
-        id: 't3',
-        location: 'B-12-02-05',
-        productName: 'Hydraulic Hose Assembly',
-        sku: 'HYD-8823',
-        quantity: 12,
-        status: 'pending',
-        sequence: 3,
-      },
-      {
-        id: 't4',
-        location: 'B-12-03-01',
-        productName: 'Filter Cartridge Premium',
-        sku: 'FLT-6701',
-        quantity: 16,
-        status: 'pending',
-        sequence: 4,
-      },
-      {
-        id: 't5',
-        location: 'C-08-01-03',
-        productName: 'Electrical Connector Kit',
-        sku: 'ELC-4402',
-        quantity: 8,
-        status: 'pending',
-        sequence: 5,
-      },
-      {
-        id: 't6',
-        location: 'C-08-02-02',
-        productName: 'Safety Valve Assembly',
-        sku: 'SFV-9156',
-        quantity: 6,
-        status: 'pending',
-        sequence: 6,
-      },
-      {
-        id: 't7',
-        location: 'D-15-05-01',
-        productName: 'Drive Belt Heavy Duty',
-        sku: 'DBT-3388',
-        quantity: 4,
-        status: 'pending',
-        sequence: 7,
-      },
-      {
-        id: 't8',
-        location: 'D-15-06-04',
-        productName: 'Pneumatic Coupling',
-        sku: 'PNC-7721',
-        quantity: 6,
-        status: 'pending',
-        sequence: 8,
-      },
-    ],
-  },
-  {
-    id: '2',
-    orderNumber: 'WH-2024-001235',
-    customer: 'Regional Hub B',
-    totalLines: 5,
-    totalItems: 67,
-    pickedItems: 18,
-    status: 'in-progress',
-    tasks: [
-      {
-        id: 't9',
-        location: 'A-03-01-02',
-        productName: 'Steel Fastener Pack',
-        sku: 'FST-1205',
-        quantity: 18,
-        status: 'picked',
-        sequence: 1,
-      },
-      {
-        id: 't10',
-        location: 'A-03-02-01',
-        productName: 'Gasket Assortment',
-        sku: 'GSK-8842',
-        quantity: 15,
-        status: 'pending',
-        sequence: 2,
-      },
-      {
-        id: 't11',
-        location: 'E-20-04-03',
-        productName: 'Industrial Lubricant',
-        sku: 'LUB-5599',
-        quantity: 12,
-        status: 'pending',
-        sequence: 3,
-      },
-      {
-        id: 't12',
-        location: 'E-20-05-01',
-        productName: 'Sealant Compound',
-        sku: 'SEL-3366',
-        quantity: 10,
-        status: 'pending',
-        sequence: 4,
-      },
-      {
-        id: 't13',
-        location: 'F-22-01-02',
-        productName: 'Cable Tie Bundle',
-        sku: 'CBL-2234',
-        quantity: 12,
-        status: 'pending',
-        sequence: 5,
-      },
-    ],
-  },
-  {
-    id: '3',
-    orderNumber: 'WH-2024-001236',
-    customer: 'Express Logistics',
-    totalLines: 3,
-    totalItems: 45,
-    pickedItems: 0,
-    status: 'pending',
-    tasks: [
-      {
-        id: 't14',
-        location: 'G-10-02-01',
-        productName: 'Motor Assembly Small',
-        sku: 'MTR-4401',
-        quantity: 15,
-        status: 'pending',
-        sequence: 1,
-      },
-      {
-        id: 't15',
-        location: 'G-10-03-02',
-        productName: 'Control Panel Module',
-        sku: 'CTL-6678',
-        quantity: 20,
-        status: 'pending',
-        sequence: 2,
-      },
-      {
-        id: 't16',
-        location: 'H-18-01-04',
-        productName: 'Sensor Array Kit',
-        sku: 'SNS-9923',
-        quantity: 10,
-        status: 'pending',
-        sequence: 3,
-      },
-    ],
-  },
-]
+/**
+ * Transform API order to application Order format
+ */
+async function transformApiOrder(apiOrder: ApiOrder): Promise<Order> {
+  // Fetch inventory data for each order line to get location codes
+  const tasksPromises = apiOrder.order_lines.map(async (line, index) => {
+    let location = 'UNKNOWN'
+    
+    try {
+      const inventory = await fetchInventoryBySku(line.product_sku)
+      // Get the first available location for this product
+      if (inventory.length > 0) {
+        location = inventory[0].location_code
+      }
+    } catch (error) {
+      console.error(`Failed to fetch inventory for SKU ${line.product_sku}:`, error)
+    }
+    
+    return {
+      id: `t${line.order_line_id}`,
+      location,
+      productName: line.product_name,
+      sku: line.product_sku,
+      quantity: line.quantity_ordered,
+      status: line.quantity_picked >= line.quantity_ordered ? ('picked' as const) : ('pending' as const),
+      sequence: index + 1,
+      orderLineId: line.order_line_id,
+    }
+  })
+  
+  const tasks = await Promise.all(tasksPromises)
+  
+  const totalItems = apiOrder.order_lines.reduce((sum, line) => sum + line.quantity_ordered, 0)
+  const pickedItems = apiOrder.order_lines.reduce((sum, line) => sum + line.quantity_picked, 0)
+  const pickedTaskCount = tasks.filter(t => t.status === 'picked').length
+  
+  let status: 'pending' | 'in-progress' | 'completed' = 'pending'
+  if (apiOrder.status === 'picking' || pickedTaskCount > 0) {
+    status = pickedTaskCount === tasks.length ? 'completed' : 'in-progress'
+  } else if (apiOrder.status === 'shipped' || apiOrder.status === 'packing') {
+    status = 'completed'
+  }
+  
+  return {
+    id: apiOrder.order_id.toString(),
+    orderNumber: apiOrder.order_number,
+    customer: apiOrder.customer_name,
+    totalLines: apiOrder.order_lines.length,
+    totalItems,
+    pickedItems,
+    tasks,
+    status,
+  }
+}
 
-export const useWarehouseStore = create<WarehouseStore>((set) => ({
-  orders: mockOrders,
+export const useWarehouseStore = create<WarehouseStore>((set, get) => ({
+  orders: [],
   activeOrderId: null,
+  isLoading: false,
+  error: null,
+  
+  loadOrders: async () => {
+    console.log('[Store] Loading orders from API...')
+    set({ isLoading: true, error: null })
+    
+    try {
+      const apiOrders = await fetchOrders()
+      console.log('[Store] Fetched orders from API:', apiOrders.length, 'orders')
+      const transformedOrders = await Promise.all(
+        apiOrders.map(apiOrder => transformApiOrder(apiOrder))
+      )
+      console.log('[Store] Transformed orders:', transformedOrders)
+      
+      set({ orders: transformedOrders, isLoading: false })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load orders'
+      console.error('[Store] Error loading orders:', error)
+      set({ error: errorMessage, isLoading: false })
+    }
+  },
   
   setActiveOrder: (orderId) => set({ activeOrderId: orderId }),
   
@@ -228,7 +129,6 @@ export const useWarehouseStore = create<WarehouseStore>((set) => ({
       )
       
       const pickedCount = updatedTasks.filter((t) => t.status === 'picked').length
-      const totalCount = updatedTasks.reduce((sum, t) => sum + t.quantity, 0)
       const pickedItemsCount = updatedTasks
         .filter((t) => t.status === 'picked')
         .reduce((sum, t) => sum + t.quantity, 0)
@@ -249,5 +149,5 @@ export const useWarehouseStore = create<WarehouseStore>((set) => ({
     activeOrderId: null,
   })),
   
-  resetOrders: () => set({ orders: mockOrders, activeOrderId: null }),
+  resetOrders: () => set({ orders: [], activeOrderId: null }),
 }))

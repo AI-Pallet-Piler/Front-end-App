@@ -30,10 +30,20 @@ export default function PickingPage() {
   const orderId = params.orderId as string
 
   const orders = useWarehouseStore((state) => state.orders)
+  const isLoading = useWarehouseStore((state) => state.isLoading)
+  const loadOrders = useWarehouseStore((state) => state.loadOrders)
   const markTaskPicked = useWarehouseStore((state) => state.markTaskPicked)
 
   const order = orders.find((o) => o.id === orderId)
   const [palletData, setPalletData] = useState<any>(null)
+
+  // Load orders on mount if not already loaded
+  useEffect(() => {
+    if (orders.length === 0 && !isLoading) {
+      loadOrders()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders.length, isLoading])
 
   // Load mock pallet data
   useEffect(() => {
@@ -47,6 +57,25 @@ export default function PickingPage() {
       })
       .catch((err) => console.error('Failed to load pallet data:', err))
   }, [])
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <Card className="max-w-md w-full">
+          <CardContent className="flex flex-col items-center justify-center gap-6 p-8 text-center">
+            <Package className="h-16 w-16 animate-pulse text-primary" />
+            <div className="space-y-3">
+              <h2 className="text-2xl font-bold text-foreground">Loading Order...</h2>
+              <p className="text-base text-muted-foreground">
+                Please wait while we fetch your order details.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   if (!order) {
     return (
