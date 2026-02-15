@@ -299,6 +299,7 @@ export default function PickingPage() {
                       <PalletViewer
                         palletData={palletData}
                         highlightedItemId={currentTask?.id}
+                        highlightedProductName={currentTask?.productName}
                         onItemClick={(itemId) => console.log('Clicked item:', itemId)}
                       />
                     ) : (

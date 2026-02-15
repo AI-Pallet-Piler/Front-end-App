@@ -26,20 +26,37 @@ interface PalletData {
 interface BoxProps {
   item: PalletItem
   isHighlighted?: boolean
+  productColor: string
   onClick?: () => void
 }
 
-function Box({ item, isHighlighted = false, onClick }: BoxProps) {
+// Generate consistent color from product name
+function getColorFromProductName(name: string): string {
+  // Simple hash function to get consistent color
+  let hash = 0
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  
+  // Generate HSL color with good saturation and lightness for visibility
+  const hue = Math.abs(hash % 360)
+  return `hsl(${hue}, 70%, 55%)`
+}
+
+function Box({ item, isHighlighted = false, productColor, onClick }: BoxProps) {
   const meshRef = useRef<THREE.Mesh>(null!)
-  const [hovered, setHovered] = useState(false)
 
   useFrame(() => {
-    if (meshRef.current && isHighlighted) {
-      // Gentle pulsing animation for highlighted box
-      const scale = 1 + Math.sin(Date.now() * 0.003) * 0.05
-      meshRef.current.scale.set(scale, scale, scale)
-    } else if (meshRef.current) {
-      meshRef.current.scale.set(1, 1, 1)
+    if (meshRef.current) {
+      const material = meshRef.current.material as THREE.MeshStandardMaterial
+      
+      if (isHighlighted) {
+        // Flashing animation - pulse emissive intensity only
+        const time = Date.now() * 0.005 // Flash speed
+        material.emissiveIntensity = 0.6 + Math.sin(time) * 0.5
+      } else {
+        material.emissiveIntensity = 0.1
+      }
     }
   })
 
@@ -58,14 +75,10 @@ function Box({ item, isHighlighted = false, onClick }: BoxProps) {
     item.d * scale,
   ]
 
-  // Color based on weight and tipping
+  // Color based on product type, with highlight override
   const getColor = () => {
-    if (isHighlighted) return '#22c55e' // Green for highlighted
-    if (hovered) return '#3b82f6' // Blue for hover
-    if (item.tipped) return '#f59e0b' // Orange for tipped items
-    if (item.weight > 50) return '#dc2626' // Red for heavy items
-    if (item.weight > 30) return '#ea580c' // Orange-red for medium-heavy
-    return '#6366f1' // Default purple
+    if (isHighlighted) return '#fbbf24' // Bright yellow/amber for flashing highlighted items
+    return productColor // Always use consistent product color
   }
 
   return (
@@ -73,16 +86,16 @@ function Box({ item, isHighlighted = false, onClick }: BoxProps) {
       ref={meshRef}
       position={position}
       onClick={onClick}
-      onPointerOver={() => setHovered(true)}
-      onPointerOut={() => setHovered(false)}
     >
       <boxGeometry args={size} />
       <meshStandardMaterial
         color={getColor()}
         transparent
-        opacity={hovered || isHighlighted ? 0.9 : 0.7}
+        opacity={0.85}
         emissive={getColor()}
-        emissiveIntensity={hovered || isHighlighted ? 0.3 : 0.1}
+        emissiveIntensity={isHighlighted ? 0.5 : 0.1}
+        roughness={0.5}
+        metalness={0.2}
       />
       {/* Wireframe outline */}
       <lineSegments>
@@ -132,6 +145,7 @@ function PalletBase({ width, depth }: PalletBaseProps) {
 export interface PalletViewerProps {
   palletData: PalletData | null
   highlightedItemId?: string
+  highlightedProductName?: string  // Highlight all items with this product name
   onItemClick?: (itemId: string) => void
   palletWidth?: number
   palletDepth?: number
@@ -140,6 +154,7 @@ export interface PalletViewerProps {
 export default function PalletViewer({
   palletData,
   highlightedItemId,
+  highlightedProductName,
   onItemClick,
   palletWidth = 80, // Euro pallet: 80cm
   palletDepth = 120, // Euro pallet: 120cm
@@ -151,6 +166,14 @@ export default function PalletViewer({
       </div>
     )
   }
+
+  // Create color map for unique product names
+  const productColorMap = new Map<string, string>()
+  palletData.items.forEach(item => {
+    if (!productColorMap.has(item.name)) {
+      productColorMap.set(item.name, getColorFromProductName(item.name))
+    }
+  })
 
   return (
     <div className="h-full w-full">
@@ -173,14 +196,21 @@ export default function PalletViewer({
         <PalletBase width={palletWidth} depth={palletDepth} />
 
         {/* Boxes */}
-        {palletData.items.map((item) => (
-          <Box
-            key={item.id}
-            item={item}
-            isHighlighted={item.id === highlightedItemId}
-            onClick={() => onItemClick?.(item.id)}
-          />
-        ))}
+        {palletData.items.map((item) => {
+          const isHighlighted = 
+            item.id === highlightedItemId || 
+            (highlightedProductName && item.name === highlightedProductName)
+          
+          return (
+            <Box
+              key={item.id}
+              item={item}
+              isHighlighted={isHighlighted}
+              productColor={productColorMap.get(item.name) || '#6366f1'}
+              onClick={() => onItemClick?.(item.id)}
+            />
+          )
+        })}
 
         {/* Controls */}
         <OrbitControls
@@ -203,23 +233,20 @@ export default function PalletViewer({
       </Canvas>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 rounded-lg bg-background/90 p-3 text-xs shadow-lg backdrop-blur-sm">
+      <div className="absolute bottom-4 left-4 rounded-lg bg-background/90 p-3 text-xs shadow-lg backdrop-blur-sm max-h-48 overflow-y-auto">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded bg-red-600" />
-            <span>Heavy (&gt;50kg)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded bg-orange-500" />
-            <span>Tipped items</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded bg-indigo-500" />
-            <span>Standard</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded bg-green-500" />
-            <span>Current item</span>
+          <p className="font-semibold mb-2">Products:</p>
+          {Array.from(productColorMap.entries()).map(([name, color]) => (
+            <div key={name} className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded flex-shrink-0" style={{ backgroundColor: color }} />
+              <span className="truncate text-xs">{name}</span>
+            </div>
+          ))}
+          <div className="border-t pt-2 mt-2">
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded bg-amber-400 animate-pulse" />
+              <span>To pick (flashing)</span>
+            </div>
           </div>
         </div>
       </div>
