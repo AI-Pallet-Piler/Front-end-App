@@ -153,7 +153,7 @@ export default function PalletViewer({
   }
 
   return (
-    <div className="h-full w-full">
+    <div className="relative h-full w-full">
       <Canvas shadows>
         {/* Camera */}
         <PerspectiveCamera makeDefault position={[2, 2, 2]} fov={50} />

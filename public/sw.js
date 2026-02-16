@@ -1,10 +1,7 @@
 // Basic service worker for PWA
-const CACHE_NAME = 'warepick-v1'
-const urlsToCache = [
-  '/',
-  '/picking',
-  '/settings',
-]
+// IMPORTANT: keep navigation requests fresh to avoid stale UI.
+const CACHE_NAME = 'warepick-v3'
+const urlsToCache = ['/', '/picking', '/settings']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -12,14 +9,30 @@ self.addEventListener('install', (event) => {
       return cache.addAll(urlsToCache)
     })
   )
+
+  // Activate updated SW ASAP
+  self.skipWaiting()
 })
 
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request)
-    })
-  )
+  const request = event.request
+
+  // For page navigations: network-first (prevents old HTML/JS from being stuck)
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
+          return response
+        })
+        .catch(() => caches.match(request).then((r) => r || caches.match('/')))
+    )
+    return
+  }
+
+  // For other requests: cache-first fallback to network
+  event.respondWith(caches.match(request).then((cached) => cached || fetch(request)))
 })
 
 self.addEventListener('activate', (event) => {
@@ -34,4 +47,7 @@ self.addEventListener('activate', (event) => {
       )
     })
   )
+
+  // Take control of existing pages
+  self.clients.claim()
 })
