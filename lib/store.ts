@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { createJSONStorage, persist } from 'zustand/middleware'
 
 export type PickTaskStatus = 'pending' | 'picked'
 
@@ -23,6 +24,20 @@ export interface Order {
   status: 'pending' | 'in-progress' | 'completed'
 }
 
+export type IssueType = 'damage' | 'missing' | 'blocked' | 'other'
+
+export interface IssueReport {
+  id: string
+  createdAt: string
+  orderId: string
+  orderNumber?: string
+  taskId?: string
+  taskLocation?: string
+  taskSku?: string
+  type: IssueType
+  message: string
+}
+
 interface WarehouseStore {
   orders: Order[]
   activeOrderId: string | null
@@ -30,6 +45,9 @@ interface WarehouseStore {
   markTaskPicked: (orderId: string, taskId: string) => void
   completeOrder: (orderId: string) => void
   resetOrders: () => void
+
+  reports: IssueReport[]
+  addReport: (report: Omit<IssueReport, 'id' | 'createdAt'>) => void
 }
 
 // Mock data
@@ -213,13 +231,35 @@ const mockOrders: Order[] = [
   },
 ]
 
-export const useWarehouseStore = create<WarehouseStore>((set) => ({
-  orders: mockOrders,
-  activeOrderId: null,
-  
-  setActiveOrder: (orderId) => set({ activeOrderId: orderId }),
-  
-  markTaskPicked: (orderId, taskId) => set((state) => ({
+const noopStorage = {
+  getItem: (_name: string) => null,
+  setItem: (_name: string, _value: string) => {},
+  removeItem: (_name: string) => {},
+}
+
+export const useWarehouseStore = create<WarehouseStore>()(
+  persist(
+    (set) => ({
+      orders: mockOrders,
+      activeOrderId: null,
+      reports: [],
+
+      setActiveOrder: (orderId) => set({ activeOrderId: orderId }),
+
+      addReport: (report) =>
+        set((state) => ({
+          reports: [
+            {
+              ...report,
+              id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+              createdAt: new Date().toISOString(),
+            },
+            ...state.reports,
+          ],
+        })),
+
+      markTaskPicked: (orderId, taskId) =>
+        set((state) => ({
     orders: state.orders.map((order) => {
       if (order.id !== orderId) return order
       
@@ -241,13 +281,23 @@ export const useWarehouseStore = create<WarehouseStore>((set) => ({
       }
     }),
   })),
-  
-  completeOrder: (orderId) => set((state) => ({
-    orders: state.orders.map((order) =>
-      order.id === orderId ? { ...order, status: 'completed' as const } : order
-    ),
-    activeOrderId: null,
-  })),
-  
-  resetOrders: () => set({ orders: mockOrders, activeOrderId: null }),
-}))
+
+      completeOrder: (orderId) =>
+        set((state) => ({
+          orders: state.orders.map((order) =>
+            order.id === orderId ? { ...order, status: 'completed' as const } : order,
+          ),
+          activeOrderId: null,
+        })),
+
+      resetOrders: () => set({ orders: mockOrders, activeOrderId: null }),
+    }),
+    {
+      name: 'warehouse-store',
+      storage: createJSONStorage(() =>
+        typeof window !== 'undefined' ? localStorage : (noopStorage as any),
+      ),
+      partialize: (state) => ({ reports: state.reports }),
+    },
+  ),
+)

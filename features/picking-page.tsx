@@ -5,11 +5,27 @@ import { ArrowLeft, Package, MapPin, CheckCircle2, AlertCircle } from 'lucide-re
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { BottomNav } from '@/components/navigation-bottom-bar'
-import { useWarehouseStore } from '@/lib/store'
+import { type IssueType, useWarehouseStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { useToast } from '@/lib/use-toast'
+
+function clampProgress(picked: number, total: number) {
+  if (!total || total <= 0) return 0
+  const p = Math.round((picked / total) * 100)
+  return Math.max(0, Math.min(100, p))
+}
 
 // Dynamically import PalletViewer to avoid SSR issues with Three.js
 const PalletViewer = dynamic(() => import('@/components/viewer-pallet-3d'), {
@@ -31,9 +47,15 @@ export default function PickingPage() {
 
   const orders = useWarehouseStore((state) => state.orders)
   const markTaskPicked = useWarehouseStore((state) => state.markTaskPicked)
+  const addReport = useWarehouseStore((state) => state.addReport)
+  const { toast } = useToast()
 
   const order = orders.find((o) => o.id === orderId)
   const [palletData, setPalletData] = useState<any>(null)
+
+  const [reportOpen, setReportOpen] = useState(false)
+  const [issueType, setIssueType] = useState<IssueType>('missing')
+  const [issueMessage, setIssueMessage] = useState('')
 
   // Load mock pallet data
   useEffect(() => {
@@ -50,14 +72,14 @@ export default function PickingPage() {
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
-        <Card className="max-w-md w-full border-2 border-dashed">
+      <div className="min-h-dvh bg-background flex items-center justify-center p-6">
+        <Card className="max-w-md w-full border border-border shadow-sm rounded-2xl">
           <CardContent className="flex flex-col items-center justify-center gap-6 p-8 text-center">
             <div className="rounded-full bg-muted p-6">
               <AlertCircle className="h-16 w-16 text-muted-foreground" />
             </div>
             <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-foreground">No Active Order</h2>
+              <h2 className="text-xl font-semibold text-foreground">No Active Order</h2>
               <p className="text-base text-muted-foreground">
                 Please start an order from the home page to access the picking page.
               </p>
@@ -65,7 +87,7 @@ export default function PickingPage() {
             <Button 
               onClick={() => router.push('/')} 
               size="lg"
-              className="w-full h-14 text-lg font-bold"
+              className="w-full h-12 rounded-xl"
             >
               <ArrowLeft className="mr-2 h-5 w-5" />
               Go to Home
@@ -79,7 +101,7 @@ export default function PickingPage() {
   const pendingTasks = order.tasks.filter((t) => t.status === 'pending')
   const pickedTasks = order.tasks.filter((t) => t.status === 'picked')
   const allPicked = pendingTasks.length === 0
-  const progress = Math.round((order.pickedItems / order.totalItems) * 100)
+  const progress = clampProgress(order.pickedItems, order.totalItems)
 
   const handleMarkPicked = (taskId: string) => {
     // Vibration feedback
@@ -95,75 +117,174 @@ export default function PickingPage() {
 
   const currentTask = pendingTasks[0]
 
-  return (
-    <div className="min-h-screen bg-background pb-40">
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border bg-primary px-4 py-4 shadow-md">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push('/')}
-            className="h-12 w-12 text-primary-foreground hover:bg-primary-foreground/20"
-          >
-            <ArrowLeft className="h-7 w-7" strokeWidth={2.5} />
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold leading-tight text-primary-foreground">
-              {order.orderNumber}
-            </h1>
-            <p className="text-sm font-medium text-primary-foreground/80">
-              {order.customer}
-            </p>
-          </div>
-        </div>
+  const submitReport = () => {
+    const message = issueMessage.trim()
+    if (!message) {
+      toast({
+        title: 'Add details',
+        description: 'Please enter what went wrong before submitting.',
+      })
+      return
+    }
 
-        {/* Progress Bar */}
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-semibold text-primary-foreground">
-              {order.pickedItems}/{order.totalItems} items picked
-            </span>
-            <span className="font-bold text-primary-foreground">{progress}%</span>
+    addReport({
+      orderId,
+      orderNumber: order.orderNumber,
+      taskId: currentTask?.id,
+      taskLocation: currentTask?.location,
+      taskSku: currentTask?.sku,
+      type: issueType,
+      message,
+    })
+
+    setIssueMessage('')
+    setIssueType('missing')
+    setReportOpen(false)
+
+    toast({
+      title: 'Report submitted',
+      description: 'Thanks — your report has been saved.',
+    })
+  }
+
+  return (
+    <div className="min-h-dvh bg-background pb-36">
+      {/* Header */}
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+        <div className="px-4 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold text-foreground">
+                {order.orderNumber}
+              </h1>
+              <p className="truncate text-sm text-muted-foreground">{order.customer}</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl border-destructive/40 text-destructive hover:border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => setReportOpen(true)}
+              >
+                <AlertCircle className="h-4 w-4" />
+                Create report
+              </Button>
+            </div>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-primary-foreground/30">
-            <div
-              className="h-full bg-accent transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
+
+          {/* Progress Bar */}
+          <div className="mt-4 space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {order.pickedItems}/{order.totalItems} items picked
+              </span>
+              <span className="font-semibold text-foreground">{progress}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-secondary">
+              <div
+                className="h-full bg-primary transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           </div>
         </div>
       </header>
 
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create report</DialogTitle>
+            <DialogDescription>
+              Use this if something is wrong while picking.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-4 space-y-5">
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground">Issue type</div>
+              <ToggleGroup
+                type="single"
+                value={issueType}
+                onValueChange={(v) => {
+                  if (v) setIssueType(v as IssueType)
+                }}
+                variant="outline"
+                className="w-full"
+              >
+                <ToggleGroupItem value="missing" className="flex-1">
+                  Missing
+                </ToggleGroupItem>
+                <ToggleGroupItem value="damage" className="flex-1">
+                  Damaged
+                </ToggleGroupItem>
+                <ToggleGroupItem value="blocked" className="flex-1">
+                  Blocked
+                </ToggleGroupItem>
+                <ToggleGroupItem value="other" className="flex-1">
+                  Other
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground">Details</div>
+              <textarea
+                value={issueMessage}
+                onChange={(e) => setIssueMessage(e.target.value)}
+                placeholder="Describe what happened…"
+                className="min-h-[120px] w-full resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+              />
+              <div className="text-[11px] text-muted-foreground">
+                Order {order.orderNumber}
+                {currentTask?.location ? ` • Location ${currentTask.location}` : ''}
+                {currentTask?.sku ? ` • SKU ${currentTask.sku}` : ''}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setReportOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button className="rounded-xl" onClick={submitReport}>
+              Submit report
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Content */}
-      <main className="px-4 py-6">
+      <main className="px-4 py-5 mx-auto w-full max-w-6xl">
         {/* Two-Column Layout for Current Task */}
         {currentTask && (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[30%_70%]">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[360px_1fr]">
             {/* Left Column - Current Item to Pick */}
             <div className="space-y-4">
-              <h2 className="text-lg font-bold text-foreground">
-                Current Item to Pick
-              </h2>
-              <Card className="border-2 border-accent shadow-lg ring-2 ring-accent/20">
-                <CardContent className="space-y-4 p-6">
+              <h2 className="text-sm font-semibold text-foreground">Current Item</h2>
+              <Card className="rounded-2xl border border-primary/30 bg-primary/5 shadow-sm">
+                <CardContent className="space-y-4 p-5">
                   {/* Task Number & Location */}
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-3">
                       <div className="flex items-center gap-2">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                           {currentTask.sequence}
                         </div>
-                        <Badge className="bg-accent text-accent-foreground">
+                        <Badge variant="secondary" className="rounded-full">
                           Active
                         </Badge>
                       </div>
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <MapPin className="h-5 w-5" />
-                          <span className="text-sm font-medium">Location</span>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <MapPin className="h-4 w-4" />
+                          <span>Location</span>
                         </div>
-                        <p className="text-4xl font-bold leading-tight text-foreground">
+                        <p className="text-3xl font-semibold leading-tight text-foreground">
                           {currentTask.location}
                         </p>
                       </div>
@@ -171,28 +292,28 @@ export default function PickingPage() {
                   </div>
 
                   {/* Product Info */}
-                  <div className="space-y-3 rounded-lg bg-muted p-4">
+                  <div className="space-y-3 rounded-xl bg-muted/40 p-4 border border-border/60">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 space-y-1">
-                        <p className="text-lg font-bold text-foreground">
+                        <p className="text-base font-semibold text-foreground">
                           {currentTask.productName}
                         </p>
                         <p className="text-sm font-medium text-muted-foreground">
                           SKU: {currentTask.sku}
                         </p>
                       </div>
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-background">
-                        <Package className="h-8 w-8 text-primary" />
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-background">
+                        <Package className="h-6 w-6 text-primary" />
                       </div>
                     </div>
 
                     {/* Quantity */}
-                    <div className="flex items-center gap-3 rounded-lg bg-background p-4">
-                      <span className="text-sm font-semibold text-muted-foreground">
+                    <div className="flex items-center justify-between gap-3 rounded-xl bg-background p-4 border border-border/60">
+                      <span className="text-xs font-medium text-muted-foreground">
                         Quantity
                       </span>
-                      <span className="text-4xl font-bold text-foreground">
-                        {currentTask.quantity}×
+                      <span className="text-2xl font-semibold text-foreground">
+                        {currentTask.quantity}
                       </span>
                     </div>
                   </div>
@@ -201,9 +322,9 @@ export default function PickingPage() {
                   <Button
                     onClick={() => handleMarkPicked(currentTask.id)}
                     size="lg"
-                    className="h-16 w-full bg-accent text-lg font-bold text-accent-foreground hover:bg-accent/90"
+                    className="h-12 w-full rounded-xl"
                   >
-                    <CheckCircle2 className="mr-2 h-6 w-6" />
+                    <CheckCircle2 className="mr-2 h-5 w-5" />
                     Mark as Picked
                   </Button>
                 </CardContent>
@@ -211,8 +332,8 @@ export default function PickingPage() {
 
               {/* Remaining Tasks Counter */}
               {pendingTasks.length > 1 && (
-                <div className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-sm font-medium text-muted-foreground">
+                <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+                  <p className="text-xs text-muted-foreground">
                     {pendingTasks.length - 1} more {pendingTasks.length - 1 === 1 ? 'item' : 'items'} remaining
                   </p>
                 </div>
@@ -221,12 +342,10 @@ export default function PickingPage() {
 
             {/* Right Column - 3D Pallet Visualization */}
             <div className="space-y-4">
-              <h2 className="text-lg font-bold text-foreground">
-                Pallet Visualization
-              </h2>
-              <Card className="border-2 shadow-lg">
+              <h2 className="text-sm font-semibold text-foreground">Pallet Visualization</h2>
+              <Card className="rounded-2xl border border-border shadow-sm">
                 <CardContent className="p-0">
-                  <div className="aspect-square w-full rounded-lg overflow-hidden">
+                  <div className="relative aspect-square w-full overflow-hidden rounded-2xl">
                     <PalletViewer
                       palletData={palletData}
                       highlightedItemId={currentTask?.id}
@@ -241,10 +360,10 @@ export default function PickingPage() {
 
         {/* No Current Task - All Picked */}
         {!currentTask && allPicked && (
-          <Card className="border-2 border-accent shadow-lg">
+          <Card className="rounded-2xl border border-border shadow-sm">
             <CardContent className="p-8 text-center">
-              <CheckCircle2 className="mx-auto h-16 w-16 text-accent" />
-              <h2 className="mt-4 text-2xl font-bold text-foreground">
+              <CheckCircle2 className="mx-auto h-14 w-14 text-accent" />
+              <h2 className="mt-4 text-xl font-semibold text-foreground">
                 All Items Picked!
               </h2>
               <p className="mt-2 text-muted-foreground">
@@ -257,17 +376,17 @@ export default function PickingPage() {
         {/* Picked Tasks */}
         {pickedTasks.length > 0 && (
           <div className="mt-8 space-y-4">
-            <h2 className="text-lg font-bold text-muted-foreground">
+            <h2 className="text-sm font-semibold text-foreground">
               Completed ({pickedTasks.length})
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {pickedTasks.map((task) => (
-                <Card key={task.id} className="border border-border bg-muted/50">
+                <Card key={task.id} className="rounded-2xl border border-border bg-muted/30 shadow-sm">
                   <CardContent className="flex items-center gap-4 p-4">
-                    <CheckCircle2 className="h-8 w-8 shrink-0 text-accent" />
+                    <CheckCircle2 className="h-6 w-6 shrink-0 text-accent" />
                     <div className="flex-1 space-y-1 min-w-0">
-                      <p className="font-bold text-foreground truncate">{task.location}</p>
-                      <p className="text-sm text-muted-foreground truncate">
+                      <p className="text-sm font-semibold text-foreground truncate">{task.location}</p>
+                      <p className="text-xs text-muted-foreground truncate">
                         {task.productName} • {task.quantity}×
                       </p>
                     </div>
@@ -280,35 +399,27 @@ export default function PickingPage() {
       </main>
 
       {/* Bottom Sticky Action Bar */}
-      <div className="fixed bottom-20 left-0 right-0 z-40 border-t border-border bg-card p-4 shadow-lg">
-        <div className="flex items-center justify-between gap-4">
+      <div className="fixed bottom-20 left-0 right-0 z-40 border-t border-border bg-background/90 backdrop-blur p-4">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
           <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">
-              Items Remaining
-            </p>
-            <p className="text-2xl font-bold text-foreground">
-              {order.totalItems - order.pickedItems}
-            </p>
+            <p className="text-[11px] text-muted-foreground">Items remaining</p>
+            <p className="text-xl font-semibold text-foreground">{order.totalItems - order.pickedItems}</p>
           </div>
+
           <Button
             onClick={handleFinishOrder}
             size="lg"
             disabled={!allPicked}
-            className={cn(
-              'h-14 flex-1 text-lg font-bold',
-              allPicked
-                ? 'bg-accent text-accent-foreground hover:bg-accent/90'
-                : 'opacity-50'
-            )}
+            className={cn('h-12 flex-1 rounded-xl', !allPicked && 'opacity-60')}
           >
             {allPicked ? (
               <>
-                <CheckCircle2 className="mr-2 h-6 w-6" />
+                <CheckCircle2 className="mr-2 h-5 w-5" />
                 Finish Order
               </>
             ) : (
               <>
-                <AlertCircle className="mr-2 h-6 w-6" />
+                <AlertCircle className="mr-2 h-5 w-5" />
                 Complete All Tasks First
               </>
             )}

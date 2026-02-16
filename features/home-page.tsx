@@ -1,7 +1,17 @@
 'use client'
 
+import { useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, MapPin, CheckCircle2, Clock } from 'lucide-react'
+import {
+  Package,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
+  Box,
+  Play,
+  Info,
+} from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,155 +19,310 @@ import { BottomNav } from '@/components/navigation-bottom-bar'
 import { useWarehouseStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
+function calcProgress(picked: number, total: number) {
+  if (!total || total <= 0) return 0
+  const p = Math.round((picked / total) * 100)
+  return Math.max(0, Math.min(100, p))
+}
+
+function estimatePallets(order: any) {
+  const explicit = Number(order?.pallets ?? order?.totalPallets)
+  if (Number.isFinite(explicit) && explicit > 0) return explicit
+
+  const totalItems = Number(order?.totalItems ?? 0)
+  if (totalItems > 0) return Math.max(1, Math.ceil(totalItems / 12))
+
+  const totalLines = Number(order?.totalLines ?? 0)
+  if (totalLines > 0) return Math.max(1, Math.ceil(totalLines / 4))
+
+  return 1
+}
+
+function DotLegend({ label, colorClass }: { label: string; colorClass: string }) {
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span className={cn('h-2 w-2 rounded-full', colorClass)} />
+      <span>{label}</span>
+    </div>
+  )
+}
+
+function StatCard({
+  icon,
+  value,
+  label,
+}: {
+  icon: React.ReactNode
+  value: number
+  label: string
+}) {
+  return (
+    <Card className="rounded-2xl border bg-card shadow-sm">
+      <CardContent className="flex flex-col items-center justify-center gap-1 p-4">
+        <div className="text-muted-foreground">{icon}</div>
+        <div className="text-xl font-bold text-foreground">{value}</div>
+        <div className="text-xs text-muted-foreground">{label}</div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function HomePage() {
   const router = useRouter()
   const orders = useWarehouseStore((state) => state.orders)
   const setActiveOrder = useWarehouseStore((state) => state.setActiveOrder)
-
-  const activeOrders = orders.filter((order) => order.status !== 'completed')
 
   const handleStartOrder = (orderId: string) => {
     setActiveOrder(orderId)
     router.push(`/picking/${orderId}`)
   }
 
+  const handleContinueOrder = (orderId: string) => {
+    setActiveOrder(orderId)
+    router.push(`/picking/${orderId}`)
+  }
+
+  // ---- Split orders into sections (based on your status values) ----
+  const { inProgress, ready, completed } = useMemo(() => {
+    const inProgress = orders.filter((o: any) => o.status === 'in-progress')
+    const completed = orders.filter((o: any) => o.status === 'completed')
+    const ready = orders.filter((o: any) => o.status !== 'completed' && o.status !== 'in-progress')
+    return { inProgress, ready, completed }
+  }, [orders])
+
+  const activeCount = inProgress.length
+  const pendingCount = ready.length
+  const completedTodayCount = completed.length // replace later with real "today" logic if you store timestamps
+
+  // To mimic screenshot: show the first in-progress card (you can render all if you want)
+  const mainInProgress = inProgress[0]
+
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-dvh bg-background pb-24">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border bg-primary px-6 py-6 shadow-md">
-        <div className="flex items-center gap-3">
-          <Package className="h-9 w-9 text-primary-foreground" strokeWidth={2.5} />
-          <div>
-            <h1 className="text-2xl font-bold leading-tight text-primary-foreground">
-              My Picking Tasks
-            </h1>
-            <p className="text-sm font-medium text-primary-foreground/80">
-              {activeOrders.length} {activeOrders.length === 1 ? 'order' : 'orders'} assigned
-            </p>
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+        <div className="px-4 py-4">
+          <h1 className="text-xl font-bold text-foreground">My Orders</h1>
+
+          <div className="mt-2 flex items-center gap-4">
+            <DotLegend label={`${activeCount} In Progress`} colorClass="bg-primary" />
+            <DotLegend label={`${pendingCount} Pending`} colorClass="bg-muted-foreground/30" />
           </div>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="px-4 py-6">
-        {activeOrders.length === 0 ? (
-          <Card className="border-2 border-dashed border-border">
-            <CardContent className="flex min-h-[300px] flex-col items-center justify-center gap-4 p-8 text-center">
-              <div className="rounded-full bg-muted p-6">
-                <Package className="h-12 w-12 text-muted-foreground" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-foreground">No Tasks Assigned</h3>
-                <p className="text-base text-muted-foreground">
-                  Check back later for new picking tasks
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {activeOrders.map((order) => {
-              const progress = Math.round((order.pickedItems / order.totalItems) * 100)
-              const isInProgress = order.status === 'in-progress'
+      <main className="px-4 py-4 space-y-6">
+        {/* Stats row */}
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard
+            icon={<Info className="h-5 w-5 text-primary" />}
+            value={activeCount}
+            label="Active"
+          />
+          <StatCard
+            icon={<Clock className="h-5 w-5" />}
+            value={pendingCount}
+            label="Pending"
+          />
+          <StatCard
+            icon={<CheckCircle2 className="h-5 w-5 text-accent" />}
+            value={completedTodayCount}
+            label="Today"
+          />
+        </div>
 
-              return (
-                <Card
-                  key={order.id}
-                  className={cn(
-                    'overflow-hidden border-2 shadow-lg transition-all hover:shadow-xl',
-                    isInProgress && 'border-accent'
-                  )}
-                >
-                  <CardHeader className="space-y-3 bg-card p-6">
+        {/* In Progress */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            In Progress
+          </div>
+
+          {!mainInProgress ? (
+            <Card className="rounded-2xl border bg-card">
+              <CardContent className="p-4 text-sm text-muted-foreground">
+                No order in progress.
+              </CardContent>
+            </Card>
+          ) : (
+            <Card
+              className="rounded-2xl border-2 border-primary/40 bg-primary/5 shadow-sm cursor-pointer"
+              role="button"
+              tabIndex={0}
+              onClick={() => handleContinueOrder(mainInProgress.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') handleContinueOrder(mainInProgress.id)
+              }}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                      <Box className="h-5 w-5" />
+                    </div>
+
+                    <div>
+                      <div className="text-sm font-bold text-foreground">
+                        {mainInProgress.orderNumber ?? mainInProgress.id}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {mainInProgress.customer}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Badge className="bg-muted text-foreground">Normal</Badge>
+                </div>
+
+                {(() => {
+                  const progress = calcProgress(
+                    Number(mainInProgress.pickedItems ?? 0),
+                    Number(mainInProgress.totalItems ?? 0)
+                  )
+                  const pallets = estimatePallets(mainInProgress)
+                  return (
+                    <div className="mt-4 space-y-2">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Progress</span>
+                        <span className="font-semibold text-primary">{progress}%</span>
+                      </div>
+
+                      <div className="h-2 w-full rounded-full bg-secondary">
+                        <div
+                          className="h-2 rounded-full bg-primary transition-all"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+
+                      <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Package className="h-4 w-4" />
+                          <span>{mainInProgress.totalItems} items</span>
+                        </div>
+                        <span className="text-muted-foreground/30">•</span>
+                        <div className="flex items-center gap-1">
+                          <Box className="h-4 w-4" />
+                          <span>{pallets} pallets</span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
+              </CardContent>
+            </Card>
+          )}
+        </section>
+
+        {/* Ready to Start */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            Ready to Start
+          </div>
+
+          {ready.length === 0 ? (
+            <Card className="rounded-2xl border bg-card">
+              <CardContent className="p-4 text-sm text-muted-foreground">
+                No pending orders.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {ready.map((order: any, idx: number) => (
+                <Card key={order.id} className="rounded-2xl border bg-card shadow-sm">
+                  <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-2xl font-bold leading-tight text-foreground">
-                            {order.orderNumber}
-                          </h2>
-                          {isInProgress && (
-                            <Badge className="bg-accent text-accent-foreground">
-                              In Progress
-                            </Badge>
-                          )}
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                          <Box className="h-5 w-5 text-muted-foreground" />
                         </div>
-                        <div className="flex items-center gap-2 text-base text-muted-foreground">
-                          <MapPin className="h-5 w-5" />
-                          <span className="font-medium">{order.customer}</span>
+
+                        <div>
+                          <div className="text-sm font-bold text-foreground">
+                            {order.orderNumber ?? order.id}
+                          </div>
+                          <div className="text-xs text-muted-foreground">{order.customer}</div>
+
+                          <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Package className="h-4 w-4" />
+                              <span>{order.totalItems} items</span>
+                            </div>
+                            <span className="text-muted-foreground/30">•</span>
+                            <div className="flex items-center gap-1">
+                              <Box className="h-4 w-4" />
+                              <span>{estimatePallets(order)} pallets</span>
+                            </div>
+                          </div>
                         </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-2">
+                        {/* If you have priority in the order object, swap this out */}
+                        <Badge variant={idx === 0 ? 'destructive' : 'secondary'}>
+                          {idx === 0 ? 'High Priority' : 'Normal'}
+                        </Badge>
+
+                        <Button
+                          onClick={() => handleStartOrder(order.id)}
+                          className="rounded-xl"
+                        >
+                          <Play className="mr-2 h-4 w-4" />
+                          Start
+                        </Button>
                       </div>
                     </div>
-
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <div className="flex items-center gap-3 rounded-lg bg-muted p-4">
-                        <Package className="h-6 w-6 text-primary" />
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Total Lines
-                          </p>
-                          <p className="text-2xl font-bold text-foreground">
-                            {order.totalLines}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 rounded-lg bg-muted p-4">
-                        <CheckCircle2 className="h-6 w-6 text-accent" />
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Total Items
-                          </p>
-                          <p className="text-2xl font-bold text-foreground">
-                            {order.totalItems}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Progress */}
-                    {isInProgress && (
-                      <div className="space-y-2 pt-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-semibold text-foreground">
-                            Progress: {order.pickedItems}/{order.totalItems} items
-                          </span>
-                          <span className="font-bold text-accent">{progress}%</span>
-                        </div>
-                        <div className="h-3 overflow-hidden rounded-full bg-secondary">
-                          <div
-                            className="h-full bg-accent transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </CardHeader>
-
-                  <CardContent className="p-6 pt-4">
-                    <Button
-                      onClick={() => handleStartOrder(order.id)}
-                      size="lg"
-                      className="h-16 w-full text-lg font-bold"
-                      variant={isInProgress ? 'default' : 'default'}
-                    >
-                      {isInProgress ? (
-                        <>
-                          <Clock className="mr-2 h-6 w-6" />
-                          Continue Picking
-                        </>
-                      ) : (
-                        <>
-                          <Package className="mr-2 h-6 w-6" />
-                          Start Picking
-                        </>
-                      )}
-                    </Button>
                   </CardContent>
                 </Card>
-              )
-            })}
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Completed Today */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <CheckCircle2 className="h-4 w-4 text-accent" />
+            Completed Today
           </div>
-        )}
+
+          {completed.length === 0 ? (
+            <Card className="rounded-2xl border bg-card">
+              <CardContent className="p-4 text-sm text-muted-foreground">
+                Nothing completed yet.
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="rounded-2xl border bg-card shadow-sm">
+              <CardContent className="p-0">
+                {completed.map((order: any, idx: number) => (
+                  <div
+                    key={order.id}
+                    className={cn(
+                      'flex items-center justify-between p-4',
+                      idx !== 0 && 'border-t border-border'
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="h-5 w-5 text-accent" />
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">
+                          {order.orderNumber ?? order.id}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{order.customer}</div>
+                      </div>
+                    </div>
+
+                    {/* If you store completedAt time, show it here */}
+                    <div className="text-xs text-muted-foreground">
+                      {order.completedAt ?? ''}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </section>
       </main>
 
       <BottomNav />
