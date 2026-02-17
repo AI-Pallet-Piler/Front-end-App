@@ -1,0 +1,103 @@
+[
+  {
+    "pallet_id": 1,
+    "items": [
+      {
+        "id": "Heavy1",
+        "name": "Heavy Base 1",
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 45,
+        "h": 20,
+        "d": 45,
+        "weight": 98,
+        "tipped": false
+      },
+      {
+        "id": "Heavy2",
+        "name": "Heavy Base 2",
+        "x": 45,
+        "y": 0,
+        "z": 0,
+        "w": 45,
+        "h": 20,
+        "d": 45,
+        "weight": 99,
+        "tipped": false
+      },
+      {
+        "id": "Heavy3",
+        "name": "Heavy Base 3",
+        "x": 0,
+        "y": 45,
+        "z": 0,
+        "w": 45,
+        "h": 20,
+        "d": 45,
+        "weight": 101,
+        "tipped": false
+      },
+      {
+        "id": "Heavy4",
+        "name": "Heavy Base 4",
+        "x": 45,
+        "y": 45,
+        "z": 0,
+        "w": 45,
+        "h": 20,
+        "d": 45,
+        "weight": 97,
+        "tipped": false
+      },
+      {
+        "id": "Tall",
+        "name": "Tall Item",
+        "x": 0,
+        "y": 90,
+        "z": 0,
+        "w": 60,
+        "h": 10,
+        "d": 10,
+        "weight": 15,
+        "tipped": true
+      },
+      {
+        "id": "Flat",
+        "name": "Flat Item",
+        "x": 0,
+        "y": 0,
+        "z": 20,
+        "w": 60,
+        "h": 5,
+        "d": 60,
+        "weight": 20,
+        "tipped": false
+      },
+      {
+        "id": "Med1",
+        "name": "Normal Box",
+        "x": 60,
+        "y": 0,
+        "z": 20,
+        "w": 20,
+        "h": 20,
+        "d": 20,
+        "weight": 10,
+        "tipped": false
+      },
+      {
+        "id": "Anvil",
+        "name": "Heavy Anvil",
+        "x": 60,
+        "y": 20,
+        "z": 20,
+        "w": 10,
+        "h": 10,
+        "d": 10,
+        "weight": 50,
+        "tipped": false
+      }
+    ]
+  }
+]
