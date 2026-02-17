@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { BottomNav } from '@/components/navigation-bottom-bar'
+import { WarehouseRouteNavigator, type WarehouseStop } from '@/components/warehouse-route-navigator'
 import { type IssueType, useWarehouseStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { useEffect, useState } from 'react'
@@ -116,6 +117,38 @@ export default function PickingPage() {
   }
 
   const currentTask = pendingTasks[0]
+
+  const palletItems = Array.isArray(palletData?.items) ? (palletData.items as any[]) : []
+  const tasksInSequence = [...order.tasks].sort((a, b) => a.sequence - b.sequence)
+
+  const navigationStops: WarehouseStop[] = tasksInSequence.flatMap((task, idx) => {
+    const palletItem = palletItems[Math.min(idx, Math.max(0, palletItems.length - 1))]
+    const placementMeta = palletItem
+      ? `Place at pallet X ${palletItem.x}cm • Y ${palletItem.y}cm • Z ${palletItem.z}cm`
+      : undefined
+
+    const pickStop: WarehouseStop = {
+      id: `pick-${task.id}`,
+      kind: 'pick',
+      location: task.location,
+      label: `Go to ${task.location}`,
+      meta: `Pick ${task.quantity} • SKU ${task.sku}`,
+    }
+
+    const placeStop: WarehouseStop = {
+      id: `place-${task.id}`,
+      kind: 'place',
+      location: 'STAGE',
+      label: 'Bring to pallet staging',
+      meta: placementMeta,
+    }
+
+    return [pickStop, placeStop]
+  })
+
+  const currentLocation = pickedTasks
+    .slice()
+    .sort((a, b) => b.sequence - a.sequence)[0]?.location ?? 'DOCK'
 
   const submitReport = () => {
     const message = issueMessage.trim()
@@ -317,6 +350,13 @@ export default function PickingPage() {
                       </span>
                     </div>
                   </div>
+
+                    {/* Google-maps-like navigation (mock) */}
+                    <WarehouseRouteNavigator
+                      currentLocation={currentLocation}
+                      stops={navigationStops}
+                      activeStopId={currentTask ? `pick-${currentTask.id}` : null}
+                    />
 
                   {/* Action Button */}
                   <Button
