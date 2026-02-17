@@ -76,6 +76,7 @@ export default function HomePage() {
   const isLoading = useWarehouseStore((state) => state.isLoading)
   const error = useWarehouseStore((state) => state.error)
   const setActiveOrder = useWarehouseStore((state) => state.setActiveOrder)
+  const startOrder = useWarehouseStore((state) => state.startOrder)
   const loadOrders = useWarehouseStore((state) => state.loadOrders)
 
   // Load orders on mount
@@ -84,9 +85,14 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleStartOrder = (orderId: string) => {
-    setActiveOrder(orderId)
-    router.push(`/picking/${orderId}`)
+  const handleStartOrder = async (orderId: string) => {
+    try {
+      await startOrder(orderId)
+      router.push(`/picking/${orderId}`)
+    } catch (error) {
+      console.error('Failed to start order:', error)
+      // Optionally show a toast or error message
+    }
   }
 
   const handleContinueOrder = (orderId: string) => {

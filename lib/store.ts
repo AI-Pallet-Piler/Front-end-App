@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { fetchOrders, fetchInventoryBySku, type ApiOrder } from './api'
+import { fetchOrders, fetchInventoryBySku, updateOrderStatus, type ApiOrder } from './api'
 
 export type PickTaskStatus = 'pending' | 'picked'
 
@@ -48,6 +48,7 @@ interface WarehouseStore {
   reports: IssueReport[]
   
   setActiveOrder: (orderId: string | null) => void
+  startOrder: (orderId: string) => Promise<void>
   markTaskPicked: (orderId: string, taskId: string) => void
   completeOrder: (orderId: string) => void
   resetOrders: () => void
@@ -92,10 +93,12 @@ async function transformApiOrder(apiOrder: ApiOrder): Promise<Order> {
   const pickedTaskCount = tasks.filter(t => t.status === 'picked').length
   
   let status: 'pending' | 'in-progress' | 'completed' = 'pending'
-  if (apiOrder.status === 'picking' || pickedTaskCount > 0) {
+  if (apiOrder.status === 'picking' || (apiOrder.status === 'packing' && pickedTaskCount > 0)) {
     status = pickedTaskCount === tasks.length ? 'completed' : 'in-progress'
-  } else if (apiOrder.status === 'shipped' || apiOrder.status === 'packing') {
+  } else if (apiOrder.status === 'shipped') {
     status = 'completed'
+  } else if (apiOrder.status === 'packing') {
+    status = 'pending'  // Ready to start picking
   }
   
   return {
@@ -146,6 +149,27 @@ export const useWarehouseStore = create<WarehouseStore>()(
       },
 
       setActiveOrder: (orderId) => set({ activeOrderId: orderId }),
+
+      startOrder: async (orderId) => {
+        const order = useWarehouseStore.getState().orders.find(o => o.id === orderId)
+        if (!order) return
+        
+        try {
+          // Update backend status to 'picking'
+          await updateOrderStatus(parseInt(orderId), 'picking')
+          
+          // Update local state
+          set((state) => ({
+            orders: state.orders.map((o) => 
+              o.id === orderId ? { ...o, status: 'in-progress' as const } : o
+            ),
+            activeOrderId: orderId,
+          }))
+        } catch (error) {
+          console.error('Failed to start order:', error)
+          throw error
+        }
+      },
 
       addReport: (report) =>
         set((state) => ({
