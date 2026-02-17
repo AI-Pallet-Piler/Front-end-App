@@ -1,24 +1,15 @@
-import SettingsPage from '@/features/settings-page'
+'use client'
 
 import { Settings as SettingsIcon, Sun, HelpCircle, LogOut, Smartphone, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { BottomNav } from '@/components/bottom-nav'
+import { BottomNav } from '@/components/navigation-bottom-bar'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 export default function SettingsPage() {
   const [brightness, setBrightness] = useState(true)
-  const router = useRouter()
-
-  const handleSwitchUser = () => {
-    // Clear current user session
-    localStorage.removeItem('pickerId')
-    // Navigate to login page
-    router.push('/login')
-  }
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -133,7 +124,6 @@ export default function SettingsPage() {
               variant="outline"
               size="lg"
               className="h-16 w-full justify-start text-lg font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground bg-transparent"
-              onClick={handleSwitchUser}
             >
               <LogOut className="mr-3 h-6 w-6" />
               Switch User
