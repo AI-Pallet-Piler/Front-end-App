@@ -10,14 +10,17 @@ import {
   Box,
   Play,
   Info,
+  AlertCircle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { BottomNav } from '@/components/navigation-bottom-bar'
 import { useWarehouseStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { useEffect } from 'react'
 
 function calcProgress(picked: number, total: number) {
   if (!total || total <= 0) return 0
@@ -70,11 +73,26 @@ function StatCard({
 export default function HomePage() {
   const router = useRouter()
   const orders = useWarehouseStore((state) => state.orders)
+  const isLoading = useWarehouseStore((state) => state.isLoading)
+  const error = useWarehouseStore((state) => state.error)
   const setActiveOrder = useWarehouseStore((state) => state.setActiveOrder)
+  const startOrder = useWarehouseStore((state) => state.startOrder)
+  const loadOrders = useWarehouseStore((state) => state.loadOrders)
 
-  const handleStartOrder = (orderId: string) => {
-    setActiveOrder(orderId)
-    router.push(`/picking/${orderId}`)
+  // Load orders on mount
+  useEffect(() => {
+    loadOrders()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleStartOrder = async (orderId: string) => {
+    try {
+      await startOrder(orderId)
+      router.push(`/picking/${orderId}`)
+    } catch (error) {
+      console.error('Failed to start order:', error)
+      // Optionally show a toast or error message
+    }
   }
 
   const handleContinueOrder = (orderId: string) => {
@@ -111,9 +129,47 @@ export default function HomePage() {
         </div>
       </header>
 
+      {/* Content */}
       <main className="px-4 py-4 space-y-6">
-        {/* Stats row */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Error State */}
+        {error && (
+          <Card className="border-2 border-destructive mb-4">
+            <CardContent className="flex items-center gap-4 p-6">
+              <AlertCircle className="h-8 w-8 text-destructive flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-bold text-foreground mb-1">Failed to Load Orders</h3>
+                <p className="text-sm text-muted-foreground">{error}</p>
+              </div>
+              <Button onClick={loadOrders} variant="outline">
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Loading State */}
+        {isLoading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="overflow-hidden border-2">
+                <CardHeader className="space-y-3 p-6">
+                  <Skeleton className="h-8 w-48" />
+                  <Skeleton className="h-5 w-64" />
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <Skeleton className="h-20" />
+                    <Skeleton className="h-20" />
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6 pt-4">
+                  <Skeleton className="h-16 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <>
+            {/* Stats row */}
+            <div className="grid grid-cols-3 gap-3">
           <StatCard
             icon={<Info className="h-5 w-5 text-primary" />}
             value={activeCount}
@@ -323,6 +379,8 @@ export default function HomePage() {
             </Card>
           )}
         </section>
+          </>
+        )}
       </main>
 
       <BottomNav />
