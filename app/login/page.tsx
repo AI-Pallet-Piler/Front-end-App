@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { User, Scan, LogIn, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -14,9 +14,57 @@ console.log('API_BASE_URL:', process.env.NEXT_PUBLIC_API_URL)
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [pickerId, setPickerId] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isAutoLogging, setIsAutoLogging] = useState(false)
+
+  // Check for auto-login from web dashboard
+  useEffect(() => {
+    const badge = searchParams.get('badge')
+    const auto = searchParams.get('auto')
+    
+    if (badge && auto === 'true') {
+      setIsAutoLogging(true)
+      performAutoLogin(badge)
+    }
+  }, [searchParams])
+
+  const performAutoLogin = async (badge: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/badge/${badge}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!response.ok) {
+        setIsAutoLogging(false)
+        setError('Auto-login failed. Please enter your Picker ID manually.')
+        return
+      }
+
+      const userData = await response.json()
+
+      if (userData.role !== 'picker') {
+        setIsAutoLogging(false)
+        setError('This badge is not registered as a picker.')
+        return
+      }
+
+      // Store picker information
+      localStorage.setItem('pickerId', badge)
+      localStorage.setItem('pickerName', userData.name)
+      localStorage.setItem('pickerEmail', userData.email)
+
+      // Redirect to dashboard
+      router.push('/')
+    } catch (err) {
+      console.error('Auto-login error:', err)
+      setIsAutoLogging(false)
+      setError('Auto-login failed. Please enter your Picker ID manually.')
+    }
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -80,6 +128,21 @@ export default function LoginPage() {
     // TODO: Implement barcode/QR scanner for badge scanning
     setError('')
     alert('Badge scanner will be implemented here')
+  }
+
+  // Show loading state during auto-login
+  if (isAutoLogging) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-primary rounded-full mb-4 animate-pulse">
+            <User className="h-10 w-10 text-primary-foreground" strokeWidth={2.5} />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Signing you in...</h2>
+          <p className="text-muted-foreground">Please wait</p>
+        </div>
+      </div>
+    )
   }
 
   return (
