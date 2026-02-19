@@ -143,7 +143,9 @@ export default function PickingPage() {
     )
   }
 
-  const pendingTasks = order.tasks.filter((t) => t.status === 'pending')
+  const pendingTasks = order.tasks
+    .filter((t) => t.status === 'pending')
+    .sort((a, b) => a.sequence - b.sequence)
   const pickedTasks = order.tasks.filter((t) => t.status === 'picked')
   const allPicked = pendingTasks.length === 0
   const progress = clampProgress(order.pickedItems, order.totalItems)
