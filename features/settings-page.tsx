@@ -1,135 +1,151 @@
 'use client'
 
-import { Settings as SettingsIcon, Sun, HelpCircle, LogOut, Smartphone, Info } from 'lucide-react'
+import { Bell, HelpCircle, Info, LogOut, Shield, TrendingUp, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { BottomNav } from '@/components/navigation-bottom-bar'
 import { useState } from 'react'
 
 export default function SettingsPage() {
-  const [brightness, setBrightness] = useState(true)
+  const [notifications, setNotifications] = useState(true)
+
+  const profile = {
+    name: 'John Picker',
+    badge: '#4782',
+    warehouse: 'Warehouse A',
+    zone: 'Zone 3',
+  }
+
+  const performance = {
+    orders: 12,
+    efficiency: 94,
+  }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border bg-primary px-6 py-6 shadow-md">
-        <div className="flex items-center gap-3">
-          <SettingsIcon className="h-9 w-9 text-primary-foreground" strokeWidth={2.5} />
-          <h1 className="text-2xl font-bold text-primary-foreground">Settings</h1>
+    <div className="min-h-dvh bg-background pb-20">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+        <div className="px-4 py-4">
+          <h1 className="text-xl font-bold text-foreground">Settings</h1>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="px-4 py-6">
-        <div className="space-y-6">
-          {/* Device Info Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Smartphone className="h-6 w-6 text-primary" />
-                Device Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between py-2">
-                <span className="text-base font-medium text-muted-foreground">
-                  Device ID
-                </span>
-                <span className="text-base font-bold text-foreground">
-                  WH-TABLET-042
-                </span>
+      <main className="px-4 py-5 mx-auto w-full max-w-3xl space-y-6">
+        {/* Profile */}
+        <Card className="rounded-2xl border bg-card shadow-sm py-0">
+          <CardContent className="p-4">
+            <div className="flex flex-col items-center text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <User className="h-6 w-6" />
               </div>
-              <Separator />
-              <div className="flex justify-between py-2">
-                <span className="text-base font-medium text-muted-foreground">
-                  Warehouse
-                </span>
-                <span className="text-base font-bold text-foreground">
-                  Distribution Center A
-                </span>
+              <div className="mt-2 text-sm font-semibold text-foreground">{profile.name}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Badge {profile.badge}</div>
+              <div className="text-xs text-muted-foreground">
+                {profile.warehouse} • {profile.zone}
               </div>
-              <Separator />
-              <div className="flex justify-between py-2">
-                <span className="text-base font-medium text-muted-foreground">
-                  App Version
-                </span>
-                <span className="text-base font-bold text-foreground">v1.0.0</span>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Display Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Sun className="h-6 w-6 text-primary" />
-                Display Settings
-              </CardTitle>
-              <CardDescription className="text-base">
-                Adjust display for warehouse environment
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between py-3">
-                <div className="space-y-1">
-                  <p className="text-base font-semibold text-foreground">
-                    High Brightness Mode
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Optimized for bright warehouse lighting
-                  </p>
+        {/* Performance */}
+        <section className="space-y-3">
+          <div className="text-sm font-semibold text-foreground">Today's Performance</div>
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="rounded-2xl border bg-card shadow-sm py-0">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  Orders
                 </div>
-                <Switch
-                  checked={brightness}
-                  onCheckedChange={setBrightness}
-                  className="data-[state=checked]:bg-accent"
-                />
-              </div>
-            </CardContent>
-          </Card>
+                <div className="mt-1 text-xl font-bold text-foreground">{performance.orders}</div>
+              </CardContent>
+            </Card>
 
-          {/* Pallet Building Preview (Coming Soon) */}
-          <Card className="border-2 border-dashed border-border">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Info className="h-6 w-6 text-muted-foreground" />
-                Upcoming Feature
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 rounded-lg bg-muted p-6 text-center">
-                <p className="text-lg font-bold text-foreground">
-                  Pallet Building Preview
-                </p>
-                <p className="text-base text-muted-foreground">
-                  3D pallet stacking visualization coming soon
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Actions */}
-          <div className="space-y-3 pt-4">
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-16 w-full justify-start text-lg font-semibold bg-transparent"
-            >
-              <HelpCircle className="mr-3 h-6 w-6" />
-              Help & Support
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="h-16 w-full justify-start text-lg font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground bg-transparent"
-            >
-              <LogOut className="mr-3 h-6 w-6" />
-              Switch User
-            </Button>
+            <Card className="rounded-2xl border bg-card shadow-sm py-0">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <TrendingUp className="h-4 w-4 text-accent" />
+                  Efficiency
+                </div>
+                <div className="mt-1 text-xl font-bold text-foreground">{performance.efficiency}%</div>
+              </CardContent>
+            </Card>
           </div>
-        </div>
+        </section>
+
+        {/* Preferences */}
+        <section className="space-y-3">
+          <div className="text-sm font-semibold text-foreground">Preferences</div>
+
+          <Card className="rounded-2xl border bg-card shadow-sm py-0">
+            <CardContent className="p-0">
+              <div className="flex items-center justify-between gap-4 px-4 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 text-muted-foreground">
+                    <Bell className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-foreground">Notifications</div>
+                    <div className="text-xs text-muted-foreground">Manage alerts and sounds</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-xs font-medium text-primary">{notifications ? 'On' : 'Off'}</div>
+                  <Switch checked={notifications} onCheckedChange={setNotifications} />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center justify-between gap-4 px-4 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 text-muted-foreground">
+                    <Shield className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-foreground">Privacy &amp; Security</div>
+                    <div className="text-xs text-muted-foreground">Manage your data</div>
+                  </div>
+                </div>
+
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center justify-between gap-4 px-4 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 text-muted-foreground">
+                    <HelpCircle className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-foreground">Help &amp; Support</div>
+                    <div className="text-xs text-muted-foreground">Get help or send feedback</div>
+                  </div>
+                </div>
+
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* About */}
+        <Card className="rounded-2xl border bg-muted/30 shadow-sm py-0">
+          <CardContent className="p-6 text-center">
+            <div className="text-xs font-semibold text-foreground">AI Pallet Piller App</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">Version 1.0.0</div>
+          </CardContent>
+        </Card>
+
+        {/* Sign out */}
+        <Button
+          variant="outline"
+          className="h-12 w-full rounded-xl border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign Out
+        </Button>
       </main>
 
       <BottomNav />
