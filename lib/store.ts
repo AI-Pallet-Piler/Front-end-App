@@ -1,6 +1,14 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { fetchOrders, fetchInventoryBySku, updateOrderStatus, type ApiOrder } from './api'
+import {
+  createReport,
+  fetchOrders,
+  fetchReports,
+  fetchInventoryBySku,
+  updateOrderStatus,
+  type ApiOrder,
+  type ApiReport,
+} from './api'
 
 export type PickTaskStatus = 'pending' | 'picked'
 
@@ -46,6 +54,7 @@ interface WarehouseStore {
   isLoading: boolean
   error: string | null
   reports: IssueReport[]
+  isLoadingReports: boolean
   
   setActiveOrder: (orderId: string | null) => void
   startOrder: (orderId: string) => Promise<void>
@@ -53,7 +62,8 @@ interface WarehouseStore {
   completeOrder: (orderId: string) => void
   resetOrders: () => void
   loadOrders: () => Promise<void>
-  addReport: (report: Omit<IssueReport, 'id' | 'createdAt'>) => void
+  loadReports: () => Promise<void>
+  addReport: (report: Omit<IssueReport, 'id' | 'createdAt'>) => Promise<void>
 }
 
 /**
@@ -61,7 +71,7 @@ interface WarehouseStore {
  */
 async function transformApiOrder(apiOrder: ApiOrder): Promise<Order> {
   // Fetch inventory data for each order line to get location codes
-  const tasksPromises = apiOrder.order_lines.map(async (line) => {
+  const tasksPromises = apiOrder.order_lines.map(async (line, index) => {
     let location = 'UNKNOWN'
     
     try {
@@ -81,35 +91,12 @@ async function transformApiOrder(apiOrder: ApiOrder): Promise<Order> {
       sku: line.product_sku,
       quantity: line.quantity_ordered,
       status: line.quantity_picked >= line.quantity_ordered ? ('picked' as const) : ('pending' as const),
-      sequence: 0, // assigned after sorting
+      sequence: index + 1,
       orderLineId: line.order_line_id,
     }
   })
-
-  /**
-   * Sort tasks by warehouse location code so picking follows the physical path.
-   * Location codes are formatted as "<Aisle>-<Row>-<Level>" (e.g. A-01-01).
-   * We sort alphabetically by aisle, then numerically by row, then by level.
-   */
-  function compareLocations(a: string, b: string): number {
-    const partsA = a.split('-')
-    const partsB = b.split('-')
-    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-      const segA = partsA[i] ?? ''
-      const segB = partsB[i] ?? ''
-      const numA = parseInt(segA, 10)
-      const numB = parseInt(segB, 10)
-      const cmp = isNaN(numA) || isNaN(numB)
-        ? segA.localeCompare(segB)
-        : numA - numB
-      if (cmp !== 0) return cmp
-    }
-    return 0
-  }
-
-  const resolvedTasks = await Promise.all(tasksPromises)
-  resolvedTasks.sort((a, b) => compareLocations(a.location, b.location))
-  const tasks = resolvedTasks.map((task, index) => ({ ...task, sequence: index + 1 }))
+  
+  const tasks = await Promise.all(tasksPromises)
   
   const totalItems = apiOrder.order_lines.reduce((sum, line) => sum + line.quantity_ordered, 0)
   const pickedItems = apiOrder.order_lines.reduce((sum, line) => sum + line.quantity_picked, 0)
@@ -150,6 +137,7 @@ export const useWarehouseStore = create<WarehouseStore>()(
       isLoading: false,
       error: null,
       reports: [],
+      isLoadingReports: false,
 
       loadOrders: async () => {
         console.log('[Store] Loading orders from API...')
@@ -194,17 +182,70 @@ export const useWarehouseStore = create<WarehouseStore>()(
         }
       },
 
-      addReport: (report) =>
+      loadReports: async () => {
+        console.log('[Store] Loading reports from API...')
+        set({ isLoadingReports: true })
+        
+        try {
+          const apiReports = await fetchReports()
+          console.log('[Store] Fetched reports from API:', apiReports.length, 'reports')
+          
+          const transformedReports: IssueReport[] = apiReports.map((r: ApiReport) => ({
+            id: r.report_id.toString(),
+            createdAt: r.created_at,
+            orderId: r.order_id.toString(),
+            orderNumber: r.order_number ?? undefined,
+            taskId: r.task_id ? r.task_id.toString() : undefined,
+            taskLocation: r.task_location ?? undefined,
+            taskSku: r.task_sku ?? undefined,
+            type: r.issue_type,
+            message: r.message,
+          }))
+          
+          set({ reports: transformedReports, isLoadingReports: false })
+        } catch (error) {
+          console.error('[Store] Error loading reports:', error)
+          set({ isLoadingReports: false })
+        }
+      },
+
+      addReport: async (report) => {
+        const orderIdValue = parseInt(report.orderId, 10)
+        if (Number.isNaN(orderIdValue)) {
+          throw new Error('Invalid order id')
+        }
+
+        const taskIdValue = report.taskId && /^\d+$/.test(report.taskId)
+          ? parseInt(report.taskId, 10)
+          : undefined
+
+        const created = await createReport({
+          order_id: orderIdValue,
+          order_number: report.orderNumber,
+          task_id: taskIdValue,
+          task_location: report.taskLocation,
+          task_sku: report.taskSku,
+          issue_type: report.type,
+          message: report.message,
+        })
+
         set((state) => ({
           reports: [
             {
-              ...report,
-              id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-              createdAt: new Date().toISOString(),
+              id: created.report_id.toString(),
+              createdAt: created.created_at,
+              orderId: created.order_id.toString(),
+              orderNumber: created.order_number ?? undefined,
+              taskId: created.task_id ? created.task_id.toString() : undefined,
+              taskLocation: created.task_location ?? undefined,
+              taskSku: created.task_sku ?? undefined,
+              type: created.issue_type,
+              message: created.message,
             },
             ...state.reports,
           ],
-        })),
+        }))
+      },
 
       markTaskPicked: (orderId, taskId) =>
         set((state) => ({
@@ -244,7 +285,7 @@ export const useWarehouseStore = create<WarehouseStore>()(
       storage: createJSONStorage(() =>
         typeof window !== 'undefined' ? localStorage : (noopStorage as any),
       ),
-      partialize: (state) => ({ reports: state.reports }),
+      partialize: (state) => ({}),
     },
   ),
 )
