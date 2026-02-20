@@ -58,9 +58,9 @@ function StatCard({
 }) {
   return (
     <Card className="rounded-2xl border bg-card shadow-sm">
-      <CardContent className="flex flex-col items-center justify-center gap-1 p-4">
+      <CardContent className="flex flex-col items-center justify-center gap-0.5 p-3">
         <div className="text-muted-foreground">{icon}</div>
-        <div className="text-xl font-bold text-foreground">{value}</div>
+        <div className="text-lg font-bold text-foreground">{value}</div>
         <div className="text-xs text-muted-foreground">{label}</div>
       </CardContent>
     </Card>
@@ -98,7 +98,7 @@ export default function HomePage() {
   const mainInProgress = inProgress[0]
 
   return (
-    <div className="min-h-dvh bg-background pb-24">
+    <div className="min-h-dvh bg-background pb-10">
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
         <div className="px-4 py-4">
@@ -115,17 +115,17 @@ export default function HomePage() {
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-3">
           <StatCard
-            icon={<Info className="h-5 w-5 text-primary" />}
+            icon={<Info className="h-4 w-4 text-primary" />}
             value={activeCount}
             label="Active"
           />
           <StatCard
-            icon={<Clock className="h-5 w-5" />}
+            icon={<Clock className="h-4 w-4" />}
             value={pendingCount}
             label="Pending"
           />
           <StatCard
-            icon={<CheckCircle2 className="h-5 w-5 text-accent" />}
+            icon={<CheckCircle2 className="h-4 w-4 text-accent" />}
             value={completedTodayCount}
             label="Today"
           />
@@ -230,20 +230,20 @@ export default function HomePage() {
             <div className="space-y-3">
               {ready.map((order: any, idx: number) => (
                 <Card key={order.id} className="rounded-2xl border bg-card shadow-sm">
-                  <CardContent className="p-4">
+                  <CardContent className="p-6 pb-0">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-                          <Box className="h-5 w-5 text-muted-foreground" />
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
+                          <Box className="h-6 w-6 text-muted-foreground" />
                         </div>
 
-                        <div>
-                          <div className="text-sm font-bold text-foreground">
+                        <div className="min-w-0">
+                          <div className="text-base font-bold text-foreground truncate">
                             {order.orderNumber ?? order.id}
                           </div>
-                          <div className="text-xs text-muted-foreground">{order.customer}</div>
+                          <div className="text-sm text-muted-foreground truncate">{order.customer}</div>
 
-                          <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                          <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
                             <div className="flex items-center gap-1">
                               <Package className="h-4 w-4" />
                               <span>{order.totalItems} items</span>
@@ -257,21 +257,20 @@ export default function HomePage() {
                         </div>
                       </div>
 
-                      <div className="flex flex-col items-end gap-2">
-                        {/* If you have priority in the order object, swap this out */}
-                        <Badge variant={idx === 0 ? 'destructive' : 'secondary'}>
-                          {idx === 0 ? 'High Priority' : 'Normal'}
-                        </Badge>
-
-                        <Button
-                          onClick={() => handleStartOrder(order.id)}
-                          className="rounded-xl"
-                        >
-                          <Play className="mr-2 h-4 w-4" />
-                          Start
-                        </Button>
-                      </div>
+                      {/* If you have priority in the order object, swap this out */}
+                      <Badge variant={idx === 0 ? 'destructive' : 'secondary'}>
+                        {idx === 0 ? 'High Priority' : 'Normal'}
+                      </Badge>
                     </div>
+
+                    <Button
+                      onClick={() => handleStartOrder(order.id)}
+                      size="sm"
+                      className="mt-4 h-10 w-full rounded-xl"
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      Start
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
