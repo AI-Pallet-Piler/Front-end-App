@@ -1,5 +1,5 @@
 /**
- * API service for communicating with the backend
+ * API service for communicating with the server (API-gateway)
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'

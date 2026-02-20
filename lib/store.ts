@@ -91,12 +91,35 @@ async function transformApiOrder(apiOrder: ApiOrder): Promise<Order> {
       sku: line.product_sku,
       quantity: line.quantity_ordered,
       status: line.quantity_picked >= line.quantity_ordered ? ('picked' as const) : ('pending' as const),
-      sequence: index + 1,
+      sequence: 0, // assigned after sorting
       orderLineId: line.order_line_id,
     }
   })
   
-  const tasks = await Promise.all(tasksPromises)
+  /**
+   * Sort tasks by warehouse location code so picking follows the physical path.
+   * Location codes are formatted as "<Aisle>-<Row>-<Level>" (e.g. A-01-01).
+   * We sort alphabetically by aisle, then numerically by row, then by level.
+   */
+  function compareLocations(a: string, b: string): number {
+    const partsA = a.split('-')
+    const partsB = b.split('-')
+    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+      const segA = partsA[i] ?? ''
+      const segB = partsB[i] ?? ''
+      const numA = parseInt(segA, 10)
+      const numB = parseInt(segB, 10)
+      const cmp = isNaN(numA) || isNaN(numB)
+        ? segA.localeCompare(segB)
+        : numA - numB
+      if (cmp !== 0) return cmp
+    }
+    return 0
+  }
+
+  const resolvedTasks = await Promise.all(tasksPromises)
+  resolvedTasks.sort((a, b) => compareLocations(a.location, b.location))
+  const tasks = resolvedTasks.map((task, index) => ({ ...task, sequence: index + 1 }))
   
   const totalItems = apiOrder.order_lines.reduce((sum, line) => sum + line.quantity_ordered, 0)
   const pickedItems = apiOrder.order_lines.reduce((sum, line) => sum + line.quantity_picked, 0)
