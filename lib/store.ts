@@ -24,6 +24,7 @@ export interface Order {
   pickedItems: number
   tasks: PickTask[]
   status: 'pending' | 'in-progress' | 'completed'
+  completedAt: string | null
 }
 
 export type IssueType = 'damage' | 'missing' | 'blocked' | 'other'
@@ -50,7 +51,7 @@ interface WarehouseStore {
   setActiveOrder: (orderId: string | null) => void
   startOrder: (orderId: string) => Promise<void>
   markTaskPicked: (orderId: string, taskId: string) => void
-  completeOrder: (orderId: string) => void
+  completeOrder: (orderId: string) => Promise<void>
   resetOrders: () => void
   loadOrders: () => Promise<void>
   addReport: (report: Omit<IssueReport, 'id' | 'createdAt'>) => void
@@ -93,11 +94,11 @@ async function transformApiOrder(apiOrder: ApiOrder): Promise<Order> {
   const pickedTaskCount = tasks.filter(t => t.status === 'picked').length
   
   let status: 'pending' | 'in-progress' | 'completed' = 'pending'
-  if (apiOrder.status === 'picking' || (apiOrder.status === 'packing' && pickedTaskCount > 0)) {
+  if (apiOrder.status === 'PICKING' || (apiOrder.status === 'PACKING' && pickedTaskCount > 0)) {
     status = pickedTaskCount === tasks.length ? 'completed' : 'in-progress'
-  } else if (apiOrder.status === 'shipped') {
+  } else if (apiOrder.status === 'SHIPPED') {
     status = 'completed'
-  } else if (apiOrder.status === 'packing') {
+  } else if (apiOrder.status === 'PACKING') {
     status = 'pending'  // Ready to start picking
   }
   
@@ -110,6 +111,7 @@ async function transformApiOrder(apiOrder: ApiOrder): Promise<Order> {
     pickedItems,
     tasks,
     status,
+    completedAt: apiOrder.completed_at,
   }
 }
 
@@ -155,8 +157,8 @@ export const useWarehouseStore = create<WarehouseStore>()(
         if (!order) return
         
         try {
-          // Update backend status to 'picking'
-          await updateOrderStatus(parseInt(orderId), 'picking')
+          // Update backend status to 'PICKING'
+          await updateOrderStatus(parseInt(orderId), 'PICKING')
           
           // Update local state
           set((state) => ({
@@ -206,13 +208,25 @@ export const useWarehouseStore = create<WarehouseStore>()(
           }),
         })),
 
-      completeOrder: (orderId) =>
-        set((state) => ({
-          orders: state.orders.map((order) =>
-            order.id === orderId ? { ...order, status: 'completed' as const } : order,
-          ),
-          activeOrderId: null,
-        })),
+      completeOrder: async (orderId) => {
+        try {
+          // Update backend status to 'SHIPPED' (this will set completed_at automatically)
+          await updateOrderStatus(parseInt(orderId), 'SHIPPED')
+          
+          // Update local state
+          set((state) => ({
+            orders: state.orders.map((order) =>
+              order.id === orderId 
+                ? { ...order, status: 'completed' as const, completedAt: new Date().toISOString() } 
+                : order,
+            ),
+            activeOrderId: null,
+          }))
+        } catch (error) {
+          console.error('Failed to complete order:', error)
+          throw error
+        }
+      },
 
       resetOrders: () => set({ orders: [], activeOrderId: null }),
     }),
