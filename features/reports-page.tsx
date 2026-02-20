@@ -224,14 +224,20 @@ export default function ReportsPage() {
 
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground">Order</div>
-              <Input
+              <select
                 value={orderQuery}
                 onChange={(e) => setOrderQuery(e.target.value)}
-                placeholder="Order number (e.g. WH-2024-001235) or id"
-                className="rounded-xl"
-              />
+                className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+              >
+                <option value="">Select an order</option>
+                {orders.map((order) => (
+                  <option key={order.id} value={order.id}>
+                    {order.orderNumber} (ID {order.id})
+                  </option>
+                ))}
+              </select>
               <div className="text-[11px] text-muted-foreground">
-                Tip: you can paste the order number from Home.
+                Choose from the orders loaded in Home.
               </div>
             </div>
 
