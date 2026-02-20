@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { AlertCircle, ClipboardList } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -90,9 +90,16 @@ function ReportCard({ report }: { report: IssueReport }) {
 
 export default function ReportsPage() {
   const reports = useWarehouseStore((s) => s.reports)
+  const isLoadingReports = useWarehouseStore((s) => s.isLoadingReports)
   const orders = useWarehouseStore((s) => s.orders)
+  const loadReports = useWarehouseStore((s) => s.loadReports)
   const addReport = useWarehouseStore((s) => s.addReport)
   const { toast } = useToast()
+
+  // Load reports from backend on mount
+  useEffect(() => {
+    loadReports()
+  }, [loadReports])
 
   const [createOpen, setCreateOpen] = useState(false)
   const [issueType, setIssueType] = useState<IssueType>('missing')
@@ -112,7 +119,7 @@ export default function ReportsPage() {
     })
   }, [reports])
 
-  const submitManualReport = () => {
+  const submitManualReport = async () => {
     const m = message.trim()
     const q = orderQuery.trim()
     if (!q) {
@@ -134,26 +141,34 @@ export default function ReportsPage() {
       (o) => o.id === q || o.orderNumber?.toLowerCase() === q.toLowerCase(),
     )
 
-    addReport({
-      orderId: match?.id ?? q,
-      orderNumber: match?.orderNumber,
-      type: issueType,
-      message: m,
-      taskLocation: taskLocation.trim() || undefined,
-      taskSku: taskSku.trim() || undefined,
-    })
+    try {
+      await addReport({
+        orderId: match?.id ?? q,
+        orderNumber: match?.orderNumber,
+        type: issueType,
+        message: m,
+        taskLocation: taskLocation.trim() || undefined,
+        taskSku: taskSku.trim() || undefined,
+      })
 
-    setCreateOpen(false)
-    setIssueType('missing')
-    setOrderQuery('')
-    setTaskLocation('')
-    setTaskSku('')
-    setMessage('')
+      setCreateOpen(false)
+      setIssueType('missing')
+      setOrderQuery('')
+      setTaskLocation('')
+      setTaskSku('')
+      setMessage('')
 
-    toast({
-      title: 'Report created',
-      description: 'Your report has been saved.',
-    })
+      toast({
+        title: 'Report created',
+        description: 'Your report has been saved.',
+      })
+    } catch (error) {
+      console.error('Failed to create report:', error)
+      toast({
+        title: 'Report failed',
+        description: 'Unable to save the report. Please try again.',
+      })
+    }
   }
 
   return (
@@ -209,14 +224,20 @@ export default function ReportsPage() {
 
             <div className="space-y-2">
               <div className="text-xs font-medium text-muted-foreground">Order</div>
-              <Input
+              <select
                 value={orderQuery}
                 onChange={(e) => setOrderQuery(e.target.value)}
-                placeholder="Order number (e.g. WH-2024-001235) or id"
-                className="rounded-xl"
-              />
+                className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+              >
+                <option value="">Select an order</option>
+                {orders.map((order) => (
+                  <option key={order.id} value={order.id}>
+                    {order.orderNumber} (ID {order.id})
+                  </option>
+                ))}
+              </select>
               <div className="text-[11px] text-muted-foreground">
-                Tip: you can paste the order number from Home.
+                Choose from the orders loaded in Home.
               </div>
             </div>
 
@@ -264,7 +285,17 @@ export default function ReportsPage() {
       </Dialog>
 
       <main className="px-4 py-5 mx-auto w-full max-w-3xl space-y-4">
-        {sortedReports.length === 0 ? (
+        {isLoadingReports ? (
+          <Card className="rounded-2xl border bg-card shadow-sm">
+            <CardContent className="p-6 text-center space-y-3">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                <ClipboardList className="h-6 w-6 text-muted-foreground animate-pulse" />
+              </div>
+              <div className="text-sm font-semibold text-foreground">Loading reports</div>
+              <div className="text-sm text-muted-foreground">Fetching the latest updates.</div>
+            </CardContent>
+          </Card>
+        ) : sortedReports.length === 0 ? (
           <Card className="rounded-2xl border bg-card shadow-sm">
             <CardContent className="p-6 text-center space-y-3">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted">

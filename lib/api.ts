@@ -1,5 +1,5 @@
 /**
- * API service for communicating with the backend
+ * API service for communicating with the server (API-gateway)
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'
@@ -34,6 +34,30 @@ export interface ApiInventory {
   product_name: string
   product_description: string | null
   location_code: string
+}
+
+export type ApiIssueType = 'damage' | 'missing' | 'blocked' | 'other'
+
+export interface ApiReport {
+  report_id: number
+  order_id: number
+  order_number?: string | null
+  task_id?: number | null
+  task_location?: string | null
+  task_sku?: string | null
+  issue_type: ApiIssueType
+  message: string
+  created_at: string
+}
+
+export interface ApiReportCreate {
+  order_id: number
+  order_number?: string
+  task_id?: number
+  task_location?: string
+  task_sku?: string
+  issue_type: ApiIssueType
+  message: string
 }
 
 /**
@@ -111,6 +135,52 @@ export async function fetchInventory(): Promise<ApiInventory[]> {
     return inventory
   } catch (error) {
     console.error('Error fetching inventory:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch all reports from the backend
+ */
+export async function fetchReports(): Promise<ApiReport[]> {
+  console.log('[API] Fetching reports from:', API_BASE_URL)
+  try {
+    const response = await fetch(`${API_BASE_URL}/reports`)
+    console.log('[API] Response status:', response.status, response.statusText)
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch reports: ${response.statusText}`)
+    }
+
+    const reports = await response.json()
+    console.log('[API] Fetched reports:', reports)
+    return reports
+  } catch (error) {
+    console.error('[API] Error fetching reports:', error)
+    throw error
+  }
+}
+
+/**
+ * Create a report
+ */
+export async function createReport(payload: ApiReportCreate): Promise<ApiReport> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/reports`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to create report: ${response.statusText}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error('Error creating report:', error)
     throw error
   }
 }
