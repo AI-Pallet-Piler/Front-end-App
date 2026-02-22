@@ -26,6 +26,7 @@ interface PalletData {
 interface BoxProps {
   item: PalletItem
   isHighlighted?: boolean
+  isPickedAlready?: boolean
   productColor: string
   onClick?: () => void
 }
@@ -43,19 +44,19 @@ function getColorFromProductName(name: string): string {
   return `hsl(${hue}, 70%, 55%)`
 }
 
-function Box({ item, isHighlighted = false, productColor, onClick }: BoxProps) {
+function Box({ item, isHighlighted = false, isPickedAlready = false, productColor, onClick }: BoxProps) {
   const meshRef = useRef<THREE.Mesh>(null!)
 
   useFrame(() => {
     if (meshRef.current) {
       const material = meshRef.current.material as THREE.MeshStandardMaterial
-      
+
       if (isHighlighted) {
         // Flashing animation - pulse emissive intensity only
-        const time = Date.now() * 0.005 // Flash speed
+        const time = Date.now() * 0.005
         material.emissiveIntensity = 0.6 + Math.sin(time) * 0.5
       } else {
-        material.emissiveIntensity = 0.1
+        material.emissiveIntensity = isPickedAlready ? 0.05 : 0.1
       }
     }
   })
@@ -91,10 +92,10 @@ function Box({ item, isHighlighted = false, productColor, onClick }: BoxProps) {
       <meshStandardMaterial
         color={getColor()}
         transparent
-        opacity={0.85}
+        opacity={isPickedAlready ? 0.75 : 0.9}
         emissive={getColor()}
-        emissiveIntensity={isHighlighted ? 0.5 : 0.1}
-        roughness={0.5}
+        emissiveIntensity={isHighlighted ? 0.5 : (isPickedAlready ? 0.05 : 0.1)}
+        roughness={isPickedAlready ? 0.8 : 0.5}
         metalness={0.2}
       />
       {/* Wireframe outline */}
@@ -146,6 +147,7 @@ export interface PalletViewerProps {
   palletData: PalletData | null
   highlightedItemId?: string
   highlightedProductName?: string  // Highlight all items with this product name
+  pickedProductNames?: string[]    // Product names already picked — shown as placed on pallet
   onItemClick?: (itemId: string) => void
   palletWidth?: number
   palletDepth?: number
@@ -155,6 +157,7 @@ export default function PalletViewer({
   palletData,
   highlightedItemId,
   highlightedProductName,
+  pickedProductNames,
   onItemClick,
   palletWidth = 80, // Euro pallet: 80cm
   palletDepth = 120, // Euro pallet: 120cm
@@ -195,17 +198,26 @@ export default function PalletViewer({
         {/* Pallet Base */}
         <PalletBase width={palletWidth} depth={palletDepth} />
 
-        {/* Boxes */}
+        {/* Boxes — steady buildup: only render picked + current items */}
         {palletData.items.map((item) => {
-          const isHighlighted = 
-            item.id === highlightedItemId || 
-            (highlightedProductName && item.name === highlightedProductName)
-          
+          const isHighlighted = !!(item.id === highlightedItemId ||
+            (highlightedProductName && item.name === highlightedProductName))
+
+          const isPicked = pickedProductNames !== undefined
+            ? pickedProductNames.includes(item.name)
+            : false
+
+          // In buildup mode: hide boxes that haven't been reached yet
+          if (pickedProductNames !== undefined && !isPicked && !isHighlighted) {
+            return null
+          }
+
           return (
             <Box
               key={item.id}
               item={item}
               isHighlighted={isHighlighted}
+              isPickedAlready={isPicked && !isHighlighted}
               productColor={productColorMap.get(item.name) || '#6366f1'}
               onClick={() => onItemClick?.(item.id)}
             />
@@ -232,34 +244,7 @@ export default function PalletViewer({
         <color attach="background" args={['#f0f0f0']} />
       </Canvas>
 
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 rounded-lg bg-background/90 p-3 text-xs shadow-lg backdrop-blur-sm max-h-48 overflow-y-auto">
-        <div className="space-y-1">
-          <p className="font-semibold mb-2">Products:</p>
-          {Array.from(productColorMap.entries()).map(([name, color]) => (
-            <div key={name} className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded flex-shrink-0" style={{ backgroundColor: color }} />
-              <span className="truncate text-xs">{name}</span>
-            </div>
-          ))}
-          <div className="border-t pt-2 mt-2">
-            <div className="flex items-center gap-2">
-              <div className="h-3 w-3 rounded bg-amber-400 animate-pulse" />
-              <span>To pick (flashing)</span>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Controls Info */}
-      <div className="absolute right-4 top-4 rounded-lg bg-background/90 p-3 text-xs shadow-lg backdrop-blur-sm">
-        <div className="space-y-1">
-          <p className="font-semibold">Controls:</p>
-          <p>🖱️ Left drag: Rotate</p>
-          <p>🖱️ Right drag: Pan</p>
-          <p>🔍 Scroll: Zoom</p>
-        </div>
-      </div>
     </div>
   )
 }
