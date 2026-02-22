@@ -1,11 +1,11 @@
-import SettingsPage from '@/features/settings-page'
+'use client'
 
 import { Settings as SettingsIcon, Sun, HelpCircle, LogOut, Smartphone, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { BottomNav } from '@/components/bottom-nav'
+import { BottomNav } from '@/components/navigation-bottom-bar'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
