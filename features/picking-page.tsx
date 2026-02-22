@@ -452,6 +452,7 @@ export default function PickingPage() {
                         palletData={palletData}
                         highlightedItemId={currentTask?.id}
                         highlightedProductName={currentTask?.productName}
+                        pickedProductNames={pickedTasks.map((t) => t.productName)}
                         onItemClick={(itemId) => console.log('Clicked item:', itemId)}
                       />
                     ) : (
