@@ -6,6 +6,7 @@ import {
   fetchReports,
   fetchInventoryBySku,
   updateOrderStatus,
+  updateOrderLinePicked,
   type ApiOrder,
   type ApiReport,
 } from './api'
@@ -59,7 +60,7 @@ interface WarehouseStore {
   
   setActiveOrder: (orderId: string | null) => void
   startOrder: (orderId: string) => Promise<void>
-  markTaskPicked: (orderId: string, taskId: string) => void
+  markTaskPicked: (orderId: string, taskId: string) => Promise<void>
   completeOrder: (orderId: string) => Promise<void>
   resetOrders: () => void
   loadOrders: () => Promise<void>
@@ -127,12 +128,12 @@ async function transformApiOrder(apiOrder: ApiOrder): Promise<Order> {
   const pickedTaskCount = tasks.filter(t => t.status === 'picked').length
   
   let status: 'pending' | 'in-progress' | 'completed' = 'pending'
-  if (apiOrder.status === 'PICKING' || (apiOrder.status === 'PACKING' && pickedTaskCount > 0)) {
-    status = pickedTaskCount === tasks.length ? 'completed' : 'in-progress'
-  } else if (apiOrder.status === 'SHIPPED') {
+  if (apiOrder.status === 'picking') {
+    status = 'in-progress'
+  } else if (apiOrder.status === 'packing') {
     status = 'completed'
-  } else if (apiOrder.status === 'PACKING') {
-    status = 'pending'  // Ready to start picking
+  } else if (apiOrder.status === 'ready') {
+    status = 'pending'  // Algorithm done, ready to start picking
   }
   
   return {
@@ -191,8 +192,8 @@ export const useWarehouseStore = create<WarehouseStore>()(
         if (!order) return
         
         try {
-          // Update backend status to 'PICKING'
-          await updateOrderStatus(parseInt(orderId), 'PICKING')
+          // Update backend status to 'picking'
+          await updateOrderStatus(parseInt(orderId), 'picking')
           
           // Update local state
           set((state) => ({
@@ -272,20 +273,33 @@ export const useWarehouseStore = create<WarehouseStore>()(
         }))
       },
 
-      markTaskPicked: (orderId, taskId) =>
+      markTaskPicked: async (orderId, taskId) => {
+        const order = useWarehouseStore.getState().orders.find(o => o.id === orderId)
+        const task = order?.tasks.find(t => t.id === taskId)
+
+        // Sync picked quantity to the database
+        if (task) {
+          try {
+            await updateOrderLinePicked(parseInt(orderId), task.orderLineId, task.quantity)
+          } catch (error) {
+            console.error('[Store] Failed to sync picked quantity to backend:', error)
+            // Continue with local state update even if the backend call fails
+          }
+        }
+
         set((state) => ({
           orders: state.orders.map((order) => {
             if (order.id !== orderId) return order
-            
-            const updatedTasks = order.tasks.map((task) =>
-              task.id === taskId ? { ...task, status: 'picked' as const } : task
+
+            const updatedTasks = order.tasks.map((t) =>
+              t.id === taskId ? { ...t, status: 'picked' as const } : t
             )
-            
+
             const pickedCount = updatedTasks.filter((t) => t.status === 'picked').length
             const pickedItemsCount = updatedTasks
               .filter((t) => t.status === 'picked')
               .reduce((sum, t) => sum + t.quantity, 0)
-            
+
             return {
               ...order,
               tasks: updatedTasks,
@@ -293,12 +307,13 @@ export const useWarehouseStore = create<WarehouseStore>()(
               status: pickedCount === order.totalLines ? ('completed' as const) : ('in-progress' as const),
             }
           }),
-        })),
+        }))
+      },
 
       completeOrder: async (orderId) => {
         try {
-          // Update backend status to 'SHIPPED' (this will set completed_at automatically)
-          await updateOrderStatus(parseInt(orderId), 'SHIPPED')
+          // Update backend status to 'packing' (picker finished)
+          await updateOrderStatus(parseInt(orderId), 'packing')
           
           // Update local state
           set((state) => ({
