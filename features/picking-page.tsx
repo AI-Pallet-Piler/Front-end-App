@@ -162,12 +162,12 @@ export default function PickingPage() {
     })
   }
 
-  const handleConfirmPlaced = (taskId: string) => {
+  const handleConfirmPlaced = async (taskId: string) => {
     // Vibration feedback
     if (typeof window !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(200)
     }
-    markTaskPicked(orderId, taskId)
+    await markTaskPicked(orderId, taskId)
     setPickingStep('pick') // Reset for next item
     toast({
       title: 'Item placed!',

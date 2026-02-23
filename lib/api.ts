@@ -190,11 +190,12 @@ export async function createReport(payload: ApiReportCreate): Promise<ApiReport>
  * Update order line picked quantity
  */
 export async function updateOrderLinePicked(
+  orderId: number,
   orderLineId: number,
   quantityPicked: number
 ): Promise<void> {
   try {
-    const response = await fetch(`${API_BASE_URL}/order-lines/${orderLineId}`, {
+    const response = await fetch(`${API_BASE_URL}/orders/${orderId}/lines/${orderLineId}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -203,7 +204,7 @@ export async function updateOrderLinePicked(
         quantity_picked: quantityPicked,
       }),
     })
-    
+
     if (!response.ok) {
       throw new Error(`Failed to update order line: ${response.statusText}`)
     }

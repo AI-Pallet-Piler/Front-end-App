@@ -106,11 +106,11 @@ export default function HomePage() {
     const completed = orders.filter((o: any) => o.status === 'completed')
     const ready = orders.filter((o: any) => o.status !== 'completed' && o.status !== 'in-progress')
     
-    // Filter completed orders by today's date
+    // Filter completed orders by today's date (null completedAt counts as today — assumed just completed)
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const completedToday = completed.filter((o: any) => {
-      if (!o.completedAt) return false
+      if (!o.completedAt) return true // no timestamp yet → assume today
       const completedDate = new Date(o.completedAt)
       completedDate.setHours(0, 0, 0, 0)
       return completedDate.getTime() === today.getTime()
@@ -352,7 +352,7 @@ export default function HomePage() {
             Completed Today
           </div>
 
-          {completed.length === 0 ? (
+          {completedToday.length === 0 ? (
             <Card className="rounded-2xl border bg-card">
               <CardContent className="p-4 text-sm text-muted-foreground">
                 Nothing completed yet.
@@ -361,7 +361,7 @@ export default function HomePage() {
           ) : (
             <Card className="rounded-2xl border bg-card shadow-sm">
               <CardContent className="p-0">
-                {completed.map((order: any, idx: number) => (
+                {completedToday.map((order: any, idx: number) => (
                   <div
                     key={order.id}
                     className={cn(
@@ -379,9 +379,10 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    {/* If you store completedAt time, show it here */}
                     <div className="text-xs text-muted-foreground">
-                      {order.completedAt ?? ''}
+                      {order.completedAt
+                        ? new Date(order.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : ''}
                     </div>
                   </div>
                 ))}
