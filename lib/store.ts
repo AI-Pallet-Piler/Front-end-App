@@ -128,12 +128,12 @@ async function transformApiOrder(apiOrder: ApiOrder): Promise<Order> {
   const pickedTaskCount = tasks.filter(t => t.status === 'picked').length
   
   let status: 'pending' | 'in-progress' | 'completed' = 'pending'
-  if (apiOrder.status === 'picking' || (apiOrder.status === 'packing' && pickedTaskCount > 0)) {
-    status = pickedTaskCount === tasks.length ? 'completed' : 'in-progress'
-  } else if (apiOrder.status === 'shipped') {
-    status = 'completed'
+  if (apiOrder.status === 'picking') {
+    status = 'in-progress'
   } else if (apiOrder.status === 'packing') {
-    status = 'pending'  // Ready to start picking
+    status = 'completed'
+  } else if (apiOrder.status === 'ready') {
+    status = 'pending'  // Algorithm done, ready to start picking
   }
   
   return {
@@ -312,8 +312,8 @@ export const useWarehouseStore = create<WarehouseStore>()(
 
       completeOrder: async (orderId) => {
         try {
-          // Update backend status to 'shipped' (this will set completed_at automatically)
-          await updateOrderStatus(parseInt(orderId), 'shipped')
+          // Update backend status to 'packing' (picker finished)
+          await updateOrderStatus(parseInt(orderId), 'packing')
           
           // Update local state
           set((state) => ({
