@@ -21,6 +21,7 @@ export interface ApiOrder {
   status: string
   priority: number
   created_at: string
+  completed_at: string | null
   promised_ship_date: string
   order_lines: ApiOrderLine[]
 }

@@ -16,6 +16,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { BottomNav } from '@/components/navigation-bottom-bar'
 import { WarehouseRouteNavigator, type WarehouseStop } from '@/components/warehouse-route-navigator'
+import { SwipeToConfirm } from '@/components/ui/swipe-to-confirm'
 import { type IssueType, useWarehouseStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { useEffect, useState } from 'react'
@@ -51,6 +52,7 @@ export default function PickingPage() {
   const isLoading = useWarehouseStore((state) => state.isLoading)
   const loadOrders = useWarehouseStore((state) => state.loadOrders)
   const markTaskPicked = useWarehouseStore((state) => state.markTaskPicked)
+  const completeOrder = useWarehouseStore((state) => state.completeOrder)
   const addReport = useWarehouseStore((state) => state.addReport)
   const { toast } = useToast()
 
@@ -62,6 +64,7 @@ export default function PickingPage() {
   const [reportOpen, setReportOpen] = useState(false)
   const [issueType, setIssueType] = useState<IssueType>('missing')
   const [issueMessage, setIssueMessage] = useState('')
+  const [pickingStep, setPickingStep] = useState<'pick' | 'place'>('pick')
   // Load mock pallet data
   useEffect(() => {
     if (!order) return
@@ -150,16 +153,44 @@ export default function PickingPage() {
   const allPicked = pendingTasks.length === 0
   const progress = clampProgress(order.pickedItems, order.totalItems)
 
-  const handleMarkPicked = (taskId: string) => {
+  const handleConfirmPicked = () => {
+    // Move to place step
+    setPickingStep('place')
+    toast({
+      title: 'Item picked!',
+      description: 'Now place the item on the pallet.',
+    })
+  }
+
+  const handleConfirmPlaced = (taskId: string) => {
     // Vibration feedback
     if (typeof window !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(200)
     }
     markTaskPicked(orderId, taskId)
+    setPickingStep('pick') // Reset for next item
+    toast({
+      title: 'Item placed!',
+      description: pendingTasks.length > 1 ? 'Moving to next item.' : 'All items picked!',
+    })
   }
 
-  const handleFinishOrder = () => {
-    router.push('/')
+  const handleFinishOrder = async () => {
+    try {
+      await completeOrder(orderId)
+      toast({
+        title: 'Order completed!',
+        description: 'The order has been marked as shipped.',
+      })
+      router.push('/')
+    } catch (error) {
+      console.error('Failed to complete order:', error)
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to complete order. Please try again.',
+      })
+    }
   }
 
   const currentTask = pendingTasks[0]
@@ -401,18 +432,37 @@ export default function PickingPage() {
                     <WarehouseRouteNavigator
                       currentLocation={currentLocation}
                       stops={navigationStops}
-                      activeStopId={currentTask ? `pick-${currentTask.id}` : null}
+                      activeStopId={currentTask ? (pickingStep === 'pick' ? `pick-${currentTask.id}` : `place-${currentTask.id}`) : null}
                     />
 
-                  {/* Action Button */}
-                  <Button
-                    onClick={() => handleMarkPicked(currentTask.id)}
-                    size="lg"
-                    className="h-12 w-full rounded-xl"
-                  >
-                    <CheckCircle2 className="mr-2 h-5 w-5" />
-                    Mark as Picked
-                  </Button>
+                  {/* Two-step confirmation sliders */}
+                  <div className="space-y-3">
+                    {pickingStep === 'pick' ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground text-center">
+                          Step 1: Pick item from shelf
+                        </p>
+                        <SwipeToConfirm
+                          onConfirm={handleConfirmPicked}
+                          label="Swipe to confirm picked"
+                          confirmLabel="Picked!"
+                          variant="primary"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground text-center">
+                          Step 2: Place item on pallet
+                        </p>
+                        <SwipeToConfirm
+                          onConfirm={() => handleConfirmPlaced(currentTask.id)}
+                          label="Swipe to confirm placed"
+                          confirmLabel="Placed!"
+                          variant="success"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 

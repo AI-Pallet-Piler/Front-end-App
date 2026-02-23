@@ -101,16 +101,27 @@ export default function HomePage() {
   }
 
   // ---- Split orders into sections (based on your status values) ----
-  const { inProgress, ready, completed } = useMemo(() => {
+  const { inProgress, ready, completed, completedToday } = useMemo(() => {
     const inProgress = orders.filter((o: any) => o.status === 'in-progress')
     const completed = orders.filter((o: any) => o.status === 'completed')
     const ready = orders.filter((o: any) => o.status !== 'completed' && o.status !== 'in-progress')
-    return { inProgress, ready, completed }
+    
+    // Filter completed orders by today's date
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const completedToday = completed.filter((o: any) => {
+      if (!o.completedAt) return false
+      const completedDate = new Date(o.completedAt)
+      completedDate.setHours(0, 0, 0, 0)
+      return completedDate.getTime() === today.getTime()
+    })
+    
+    return { inProgress, ready, completed, completedToday }
   }, [orders])
 
   const activeCount = inProgress.length
   const pendingCount = ready.length
-  const completedTodayCount = completed.length // replace later with real "today" logic if you store timestamps
+  const completedTodayCount = completedToday.length
 
   // To mimic screenshot: show the first in-progress card (you can render all if you want)
   const mainInProgress = inProgress[0]
