@@ -34,7 +34,7 @@ export default function LoginPage() {
   const performAutoLogin = async (badge: string) => {
     try {
       // Call security API via gateway to authenticate with badge
-      const response = await fetch(`${API_BASE_URL}/v1/auth/login-badge`, {
+      const response = await fetch(`${API_BASE_URL}/auth/login-badge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ badge_number: badge }),
@@ -85,7 +85,7 @@ export default function LoginPage() {
 
     try {
       // Call security API via gateway to authenticate with badge
-      const response = await fetch(`${API_BASE_URL}/v1/auth/login-badge`, {
+      const response = await fetch(`${API_BASE_URL}/auth/login-badge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ badge_number: pickerId }),

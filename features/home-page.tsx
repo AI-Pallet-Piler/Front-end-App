@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Package,
@@ -72,6 +72,7 @@ function StatCard({
 
 export default function HomePage() {
   const router = useRouter()
+  const [authChecked, setAuthChecked] = useState(false)
   const orders = useWarehouseStore((state) => state.orders)
   const isLoading = useWarehouseStore((state) => state.isLoading)
   const error = useWarehouseStore((state) => state.error)
@@ -79,11 +80,27 @@ export default function HomePage() {
   const startOrder = useWarehouseStore((state) => state.startOrder)
   const loadOrders = useWarehouseStore((state) => state.loadOrders)
 
-  // Load orders on mount
+  // Check authentication on mount
   useEffect(() => {
-    loadOrders()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const token = localStorage.getItem('access_token')
+    console.log('Auth check - token:', token ? 'found' : 'not found')
+    
+    if (!token) {
+      console.log('No access token, redirecting to login')
+      router.push('/login')
+      return
+    }
+    
+    setAuthChecked(true)
   }, [])
+
+  // Load orders on mount - but only after auth is checked
+  useEffect(() => {
+    if (authChecked) {
+      loadOrders()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked])
 
   const handleStartOrder = async (orderId: string) => {
     try {
@@ -125,6 +142,18 @@ export default function HomePage() {
 
   // To mimic screenshot: show the first in-progress card (you can render all if you want)
   const mainInProgress = inProgress[0]
+
+  // Show loading while checking authentication
+  if (!authChecked) {
+    return (
+      <div className="min-h-dvh bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin inline-flex items-center justify-center w-8 h-8 border-2 border-primary border-t-transparent rounded-full"></div>
+          <p className="mt-4 text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-dvh bg-background pb-10">
