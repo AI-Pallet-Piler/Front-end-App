@@ -28,6 +28,7 @@ export interface Order {
   id: string
   orderNumber: string
   customer: string
+  priority: number
   totalLines: number
   totalItems: number
   pickedItems: number
@@ -140,6 +141,7 @@ async function transformApiOrder(apiOrder: ApiOrder): Promise<Order> {
     id: apiOrder.order_id.toString(),
     orderNumber: apiOrder.order_number,
     customer: apiOrder.customer_name,
+    priority: apiOrder.priority,
     totalLines: apiOrder.order_lines.length,
     totalItems,
     pickedItems,

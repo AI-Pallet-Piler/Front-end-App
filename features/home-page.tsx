@@ -104,7 +104,9 @@ export default function HomePage() {
   const { inProgress, ready, completed, completedToday } = useMemo(() => {
     const inProgress = orders.filter((o: any) => o.status === 'in-progress')
     const completed = orders.filter((o: any) => o.status === 'completed')
-    const ready = orders.filter((o: any) => o.status !== 'completed' && o.status !== 'in-progress')
+    const ready = orders
+      .filter((o: any) => o.status !== 'completed' && o.status !== 'in-progress')
+      .sort((a: any, b: any) => (b.priority ?? 0) - (a.priority ?? 0))
     
     // Filter completed orders by today's date (null completedAt counts as today — assumed just completed)
     const today = new Date()
@@ -238,7 +240,13 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <Badge className="bg-muted text-foreground">Normal</Badge>
+                  <Badge className="bg-muted text-foreground">
+                    {(mainInProgress as any).priority >= 3
+                      ? 'High Priority'
+                      : (mainInProgress as any).priority === 2
+                      ? 'Medium'
+                      : 'Normal'}
+                  </Badge>
                 </div>
 
                 {(() => {
@@ -324,9 +332,21 @@ export default function HomePage() {
                         </div>
                       </div>
 
-                      {/* If you have priority in the order object, swap this out */}
-                      <Badge variant={idx === 0 ? 'destructive' : 'secondary'}>
-                        {idx === 0 ? 'High Priority' : 'Normal'}
+                      {/* Priority badge based on actual order priority */}
+                      <Badge
+                        variant={
+                          order.priority >= 3
+                            ? 'destructive'
+                            : order.priority === 2
+                            ? 'outline'
+                            : 'secondary'
+                        }
+                      >
+                        {order.priority >= 3
+                          ? 'High Priority'
+                          : order.priority === 2
+                          ? 'Medium'
+                          : 'Normal'}
                       </Badge>
                     </div>
 
