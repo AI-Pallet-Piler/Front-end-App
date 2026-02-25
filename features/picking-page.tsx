@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { ArrowLeft, Package, MapPin, CheckCircle2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -44,9 +44,8 @@ const PalletViewer = dynamic(() => import('@/components/viewer-pallet-3d'), {
 })
 
 export default function PickingPage() {
-  const params = useParams()
   const router = useRouter()
-  const orderId = params.orderId as string
+  const orderId = useWarehouseStore((state) => state.activeOrderId) ?? ''
 
   const orders = useWarehouseStore((state) => state.orders)
   const isLoading = useWarehouseStore((state) => state.isLoading)

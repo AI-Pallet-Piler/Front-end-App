@@ -88,7 +88,7 @@ export default function HomePage() {
   const handleStartOrder = async (orderId: string) => {
     try {
       await startOrder(orderId)
-      router.push(`/picking/${orderId}`)
+      router.push('/picking')
     } catch (error) {
       console.error('Failed to start order:', error)
       // Optionally show a toast or error message
@@ -97,7 +97,7 @@ export default function HomePage() {
 
   const handleContinueOrder = (orderId: string) => {
     setActiveOrder(orderId)
-    router.push(`/picking/${orderId}`)
+    router.push('/picking')
   }
 
   // ---- Split orders into sections (based on your status values) ----

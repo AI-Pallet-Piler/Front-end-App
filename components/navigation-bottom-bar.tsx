@@ -52,7 +52,7 @@ export function BottomNav() {
       return
     }
     setActiveOrder(inferredActiveOrderId)
-    router.push(`/picking/${inferredActiveOrderId}`)
+    router.push('/picking')
   }
 
   return (
@@ -76,7 +76,7 @@ export function BottomNav() {
             return (
               <Link
                 key={item.href}
-                href={inferredActiveOrderId ? `/picking/${inferredActiveOrderId}` : '/picking'}
+                href="/picking"
                 onClick={handleActiveOrderClick}
                 className={className}
               >
