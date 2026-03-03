@@ -1,16 +1,26 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { MockWarehouseFloorplan, MOCK_WAREHOUSE_VIEWBOX } from '@/components/mock-warehouse-floorplan'
+import { MockWarehouseFloorplan } from '@/components/mock-warehouse-floorplan'
 import {
-  buildFullRoute,
-  locationToGridXY,
+  computeBounds,
+  createCoordTransform,
+  locationToSvgXY,
   routeSteps,
+  WAREHOUSE_VIEWBOX,
+  type MapPoint,
   type WarehouseGridPoint,
 } from '@/lib/warehouse-nav'
+import { buildRealRoute } from '@/lib/warehouse-routing'
+import {
+  fetchWarehouseMap,
+  fetchNavigationLocations,
+  type WarehouseMapData,
+  type WarehouseLocation,
+} from '@/lib/api'
 
 export type WarehouseStop = {
   id: string
@@ -28,12 +38,43 @@ type Props = {
   className?: string
 }
 
+// ── shared singleton cache so we only hit the API once ────────
+
+let _mapPromise: Promise<WarehouseMapData> | null = null
+let _locsPromise: Promise<WarehouseLocation[]> | null = null
+
+function getMapData(): Promise<WarehouseMapData> {
+  if (!_mapPromise) {
+    _mapPromise = fetchWarehouseMap().catch((err) => {
+      _mapPromise = null
+      throw err
+    })
+  }
+  return _mapPromise
+}
+
+function getLocations(): Promise<WarehouseLocation[]> {
+  if (!_locsPromise) {
+    _locsPromise = fetchNavigationLocations()
+      .then((res) => res.locations)
+      .catch((err) => {
+        _locsPromise = null
+        throw err
+      })
+  }
+  return _locsPromise
+}
+
+// ── dot colour helper ─────────────────────────────────────────
+
 function dotColor(kind: WarehouseGridPoint['kind'], active: boolean) {
   if (active) return 'var(--primary)'
   if (kind === 'start') return 'var(--muted-foreground)'
   if (kind === 'place') return 'var(--accent)'
   return 'var(--primary)'
 }
+
+// ── component ─────────────────────────────────────────────────
 
 export function WarehouseRouteNavigator({
   title = 'Navigation',
@@ -42,6 +83,28 @@ export function WarehouseRouteNavigator({
   activeStopId,
   className,
 }: Props) {
+  // ── warehouse data (fetched once) ────────────────────────────
+  const [mapData, setMapData] = useState<WarehouseMapData | null>(null)
+  const [locations, setLocations] = useState<WarehouseLocation[]>([])
+  const [dataReady, setDataReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([getMapData(), getLocations()])
+      .then(([map, locs]) => {
+        if (cancelled) return
+        setMapData(map)
+        setLocations(locs)
+        setDataReady(true)
+      })
+      .catch((err) => {
+        console.error('[WarehouseRouteNavigator] failed to load map data', err)
+        if (!cancelled) setDataReady(true) // still render – just without real map
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  // ── visible stops window ──────────────────────────────────────
   const activeIndex = useMemo(() => {
     if (!activeStopId) return 0
     const idx = stops.findIndex((s) => s.id === activeStopId)
@@ -50,31 +113,32 @@ export function WarehouseRouteNavigator({
 
   const visibleStops = useMemo(() => {
     if (stops.length === 0) return [] as WarehouseStop[]
-    return stops.slice(activeIndex, Math.min(stops.length, activeIndex + 2))
+    return stops.slice(activeIndex, Math.min(stops.length, activeIndex + 1))
   }, [activeIndex, stops])
 
-  const { points, route, view } = useMemo(() => {
-    const startXY = locationToGridXY(currentLocation) ?? { x: 80, y: 535 }
+  // ── coordinate transform ──────────────────────────────────────
+  const { bounds, toSvg } = useMemo(() => {
+    if (!mapData) return { bounds: null, toSvg: null }
+    const b = computeBounds(mapData)
+    const t = createCoordTransform(b)
+    return { bounds: b, toSvg: t.toSvg }
+  }, [mapData])
 
-    const stopPoints: WarehouseGridPoint[] = visibleStops
-      .map((s, idx) => {
-        const baseXY = locationToGridXY(s.location)
-        if (!baseXY) return null
+  // ── resolve stop points to SVG coords ─────────────────────────
+  const pointsData = useMemo(() => {
+    if (!toSvg || !bounds) return null
 
-        // Give each PLACE stop a unique nearby offset (mock),
-        // so repeated STAGE placements don’t overlap visually.
-        let x = baseXY.x
-        let y = baseXY.y
-        if (s.kind === 'place') {
-          const ox = (idx % 3) - 1
-          const oy = Math.floor((idx % 9) / 3) - 1
-          x = baseXY.x + ox
-          y = baseXY.y + oy
-        }
+    const lookup = (code: string) => locationToSvgXY(code, locations, toSvg, bounds)
 
+    const startXY = lookup(currentLocation) ?? { x: 80, y: WAREHOUSE_VIEWBOX.height - 65 }
+
+    const stopPoints = visibleStops
+      .map((s) => {
+        const base = lookup(s.location)
+        if (!base) return null
         return {
-          x,
-          y,
+          x: base.x,
+          y: base.y,
           label: s.label,
           kind: s.kind,
           meta: s.meta,
@@ -82,29 +146,32 @@ export function WarehouseRouteNavigator({
       })
       .filter(Boolean) as WarehouseGridPoint[]
 
-    const all = [{ x: startXY.x, y: startXY.y }, ...stopPoints.map((p) => ({ x: p.x, y: p.y }))]
-    const fullRoute = buildFullRoute(all)
-
     return {
-      points: {
-        start: { x: startXY.x, y: startXY.y, label: 'You', kind: 'start' as const },
-        stops: stopPoints.map((p, i) => ({
-          x: p.x,
-          y: p.y,
-          label: p.label,
-          kind: p.kind,
-          meta: p.meta,
-          id: visibleStops[i]?.id,
-        })),
-      },
-      route: fullRoute,
-      view: { cols: MOCK_WAREHOUSE_VIEWBOX.width, rows: MOCK_WAREHOUSE_VIEWBOX.height },
+      start: { x: startXY.x, y: startXY.y, label: 'You', kind: 'start' as const },
+      stops: stopPoints.map((p, i) => ({ ...p, id: visibleStops[i]?.id })),
+      codes: [currentLocation, ...visibleStops.map((s) => s.location)],
     }
-  }, [currentLocation, visibleStops])
+  }, [currentLocation, visibleStops, toSvg, bounds, locations])
 
-  const viewBoxW = view.cols
-  const viewBoxH = view.rows
+  // ── fetch navigation route (async) ────────────────────────────
+  const [route, setRoute] = useState<MapPoint[]>([])
+  const routeSeqRef = useRef(0) // prevent stale updates
 
+  useEffect(() => {
+    if (!pointsData || !toSvg || !bounds) {
+      setRoute([])
+      return
+    }
+
+    const seq = ++routeSeqRef.current
+    const lookup = (code: string) => locationToSvgXY(code, locations, toSvg, bounds)
+
+    buildRealRoute(pointsData.codes, toSvg, lookup).then((r) => {
+      if (seq === routeSeqRef.current) setRoute(r)
+    })
+  }, [pointsData, toSvg, bounds, locations])
+
+  // ── render ────────────────────────────────────────────────────
   const polyline = route.map((p) => `${p.x},${p.y}`).join(' ')
 
   return (
@@ -118,43 +185,48 @@ export function WarehouseRouteNavigator({
             </div>
           </div>
           <Badge variant="secondary" className="rounded-full">
-            Mock map
+            {dataReady && mapData ? 'Live map' : 'Loading…'}
           </Badge>
         </div>
 
         <div className="relative overflow-hidden rounded-xl border border-border bg-muted/10">
           <div className="aspect-[5/3] w-full">
-            <MockWarehouseFloorplan className="pointer-events-none">
+            <MockWarehouseFloorplan className="pointer-events-none" mapData={mapData}>
               <g>
+                {/* Route polyline – glow + crisp */}
                 {polyline.length > 0 && (
-                  <polyline
-                    points={polyline}
-                    fill="none"
-                    stroke="var(--primary)"
-                    strokeWidth="6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity="0.25"
-                  />
-                )}
-                {polyline.length > 0 && (
-                  <polyline
-                    points={polyline}
-                    fill="none"
-                    stroke="var(--primary)"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity="0.95"
-                  />
+                  <>
+                    <polyline
+                      points={polyline}
+                      fill="none"
+                      stroke="var(--primary)"
+                      strokeWidth="6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity="0.25"
+                    />
+                    <polyline
+                      points={polyline}
+                      fill="none"
+                      stroke="var(--primary)"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity="0.95"
+                    />
+                  </>
                 )}
 
-                {/* Start */}
-                <circle cx={points.start.x} cy={points.start.y} r="7" fill={dotColor('start', false)} />
-                <circle cx={points.start.x} cy={points.start.y} r="3" fill="var(--background)" opacity="0.9" />
+                {/* Start dot */}
+                {pointsData && (
+                  <>
+                    <circle cx={pointsData.start.x} cy={pointsData.start.y} r="7" fill={dotColor('start', false)} />
+                    <circle cx={pointsData.start.x} cy={pointsData.start.y} r="3" fill="var(--background)" opacity="0.9" />
+                  </>
+                )}
 
-                {/* Stops */}
-                {points.stops.map((s) => {
+                {/* Stop dots */}
+                {pointsData?.stops.map((s) => {
                   const isActive = Boolean(activeStopId && s.id === activeStopId)
                   return (
                     <g key={`${s.id}-${s.x}-${s.y}`}>
@@ -174,6 +246,7 @@ export function WarehouseRouteNavigator({
           </div>
         </div>
 
+        {/* Stop list */}
         <div className="space-y-2">
           {visibleStops.map((s, idx) => {
             const active = Boolean(activeStopId && s.id === activeStopId) || (!activeStopId && idx === 0)
