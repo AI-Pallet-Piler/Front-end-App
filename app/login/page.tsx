@@ -33,36 +33,36 @@ function LoginForm() {
 
   const performAutoLogin = async (badge: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/badge/${badge}`, {
-        method: 'GET',
+      // Call security API via gateway to authenticate with badge
+      const response = await fetch(`${API_BASE_URL}/auth/login-badge`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ badge_number: badge }),
       })
 
       if (!response.ok) {
         setIsAutoLogging(false)
-        setError('Auto-login failed. Please enter your Picker ID manually.')
+        if (response.status === 401) {
+          setError('Invalid badge number. Auto-login failed.')
+        } else {
+          setError('Auto-login failed. Please enter your badge manually.')
+        }
         return
       }
 
-      const userData = await response.json()
+      const tokenData = await response.json()
 
-      if (userData.role !== 'picker') {
-        setIsAutoLogging(false)
-        setError('This badge is not registered as a picker.')
-        return
-      }
-
-      // Store picker information
+      // Store JWT tokens
+      localStorage.setItem('access_token', tokenData.access_token)
+      localStorage.setItem('refresh_token', tokenData.refresh_token)
       localStorage.setItem('pickerId', badge)
-      localStorage.setItem('pickerName', userData.name)
-      localStorage.setItem('pickerEmail', userData.email)
 
       // Redirect to dashboard
       router.push('/')
     } catch (err) {
       console.error('Auto-login error:', err)
       setIsAutoLogging(false)
-      setError('Auto-login failed. Please enter your Picker ID manually.')
+      setError('Auto-login failed. Please enter your badge manually.')
     }
   }
 
@@ -70,29 +70,30 @@ function LoginForm() {
     e.preventDefault()
     setError('')
 
-    // Validate picker ID
+    // Validate badge number
     if (!pickerId.trim()) {
-      setError('Please enter your Picker ID')
+      setError('Please enter your Badge ID')
       return
     }
 
     if (pickerId.length < 3) {
-      setError('Picker ID must be at least 3 characters')
+      setError('Badge ID must be at least 3 characters')
       return
     }
 
     setIsLoading(true)
 
     try {
-      // Call the backend API to verify picker exists
-      const response = await fetch(`${API_BASE_URL}/users/badge/${pickerId}`, {
-        method: 'GET',
+      // Call security API via gateway to authenticate with badge
+      const response = await fetch(`${API_BASE_URL}/auth/login-badge`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ badge_number: pickerId }),
       })
 
       if (!response.ok) {
-        if (response.status === 404) {
-          setError('Picker ID not found. Please check and try again.')
+        if (response.status === 401) {
+          setError('Invalid badge number. Please check and try again.')
         } else {
           setError('Login failed. Please try again.')
         }
@@ -100,19 +101,12 @@ function LoginForm() {
         return
       }
 
-      const userData = await response.json()
+      const tokenData = await response.json()
 
-      // Verify the user is a picker
-      if (userData.role !== 'picker') {
-        setError('This badge is not registered as a picker.')
-        setIsLoading(false)
-        return
-      }
-
-      // Store picker information
+      // Store JWT tokens
+      localStorage.setItem('access_token', tokenData.access_token)
+      localStorage.setItem('refresh_token', tokenData.refresh_token)
       localStorage.setItem('pickerId', pickerId)
-      localStorage.setItem('pickerName', userData.name)
-      localStorage.setItem('pickerEmail', userData.email)
 
       // Redirect to dashboard
       router.push('/')

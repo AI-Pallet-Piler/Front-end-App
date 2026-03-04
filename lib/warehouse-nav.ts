@@ -1,3 +1,13 @@
+/**
+ * Warehouse navigation helpers.
+ *
+ * Converts warehouse location codes to SVG coordinates and builds
+ * navigation routes using the backend navigation API.
+ */
+
+import type { WarehouseLocation, WarehouseMapData } from '@/lib/api'
+
+// ── public types ──────────────────────────────────────────────
 export type WarehouseGridPoint = {
   x: number
   y: number
@@ -8,100 +18,146 @@ export type WarehouseGridPoint = {
 
 export type MapPoint = { x: number; y: number }
 
-export type LocationParts = {
-  zone: string
-  aisle: number
-  bay: number
-  level: number
+// ── SVG viewBox constants (kept for compatibility) ────────────
+export const WAREHOUSE_VIEWBOX = { width: 1000, height: 600 } as const
+const PADDING = 50
+
+// ── coordinate scaling ────────────────────────────────────────
+
+/** Bounding box of the real warehouse geometry. */
+export interface WarehouseBounds {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+  width: number
+  height: number
 }
 
-const ZONES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+/**
+ * Compute the bounding box that encloses every geometry in the map.
+ */
+export function computeBounds(map: WarehouseMapData): WarehouseBounds {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
 
-export function parseLocationCode(raw: string): LocationParts | null {
-  const value = raw.trim()
-  const match = /^([A-Za-z])-(\d{1,2})-(\d{1,2})-(\d{1,2})$/.exec(value)
-  if (!match) return null
+  function visit(x: number, y: number) {
+    if (x < minX) minX = x
+    if (y < minY) minY = y
+    if (x > maxX) maxX = x
+    if (y > maxY) maxY = y
+  }
 
-  const zone = match[1].toUpperCase()
-  const aisle = Number(match[2])
-  const bay = Number(match[3])
-  const level = Number(match[4])
-
-  if (!Number.isFinite(aisle) || !Number.isFinite(bay) || !Number.isFinite(level)) return null
-  if (aisle <= 0 || bay <= 0 || level <= 0) return null
-
-  return { zone, aisle, bay, level }
-}
-
-export function zoneIndex(zone: string) {
-  const idx = ZONES.indexOf(zone.toUpperCase())
-  return idx >= 0 ? idx : 0
-}
-
-export function locationToGridXY(location: string): { x: number; y: number } | null {
-  const key = location.trim().toUpperCase()
-
-  // Special mock points.
-  // These map to the dock/stage area on the floorplan.
-  if (key === 'DOCK') return { x: 80, y: 535 }
-  if (key === 'STAGE') return { x: 205, y: 535 }
-
-  const parts = parseLocationCode(location)
-  if (!parts) return null
-
-  // Floorplan model (mock, forklift-friendly):
-  // - We snap locations to drive aisles so routes never cross through rack blocks.
-  // - Aisle number scales left→right across the building.
-  // - Zone/bay scales top→bottom.
-  const AISLE_X = [120, 250, 380, 510, 640, 770, 900]
-
-  const t = clamp((parts.aisle - 1) / 19, 0, 1)
-  const xRaw = 120 + t * (900 - 120)
-  const x = nearest(xRaw, AISLE_X)
-
-  const zoneTop = 70
-  const zoneHeight = 55
-  const yBase = zoneTop + zoneIndex(parts.zone) * zoneHeight
-  const y = clamp(yBase + (clamp(parts.bay, 1, 20) - 1) * 2.2, 60, 500)
-
-  return { x, y }
-}
-
-function nearest(value: number, options: number[]) {
-  let best = options[0] ?? value
-  let bestD = Number.POSITIVE_INFINITY
-  for (const o of options) {
-    const d = Math.abs(value - o)
-    if (d < bestD) {
-      bestD = d
-      best = o
+  for (const c of map.corridors) {
+    if (c.geometry?.coordinates) {
+      for (const coord of c.geometry.coordinates as number[][]) {
+        visit(coord[0], coord[1])
+      }
     }
   }
-  return best
-}
 
-import { polylineLength, routeBetweenPoints } from '@/lib/warehouse-routing'
-
-export function buildFullRoute(points: Array<{ x: number; y: number }>) {
-  if (points.length === 0) return [] as Array<{ x: number; y: number }>
-  if (points.length === 1) return [points[0]]
-
-  const result: Array<{ x: number; y: number }> = [points[0]]
-  for (let i = 0; i < points.length - 1; i++) {
-    const segment = routeBetweenPoints(points[i], points[i + 1])
-    for (let j = 1; j < segment.length; j++) result.push(segment[j])
+  for (const s of map.shelves) {
+    if (s.geometry?.coordinates) {
+      for (const ring of s.geometry.coordinates as number[][][]) {
+        for (const coord of ring) {
+          visit(coord[0], coord[1])
+        }
+      }
+    }
   }
 
-  return result
+  // Fallback when no geometry was found (e.g. empty DB)
+  if (!isFinite(minX)) {
+    minX = 0; minY = 0; maxX = 40; maxY = 30
+  }
+
+  return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY }
 }
 
-export function routeSteps(route: Array<{ x: number; y: number }>) {
-  // Approximate distance indicator for the UI.
-  // Scale is arbitrary in this mock; treat 20 units ~ 1 step.
-  const len = polylineLength(route)
-  return Math.max(0, Math.round(len / 20))
+/**
+ * Build a transform function that maps warehouse coordinates → SVG coordinates.
+ *
+ * The real warehouse is scaled uniformly to fit the SVG viewBox with padding,
+ * and Y is flipped (SVG Y-down vs math Y-up).
+ */
+export function createCoordTransform(bounds: WarehouseBounds) {
+  const vw = WAREHOUSE_VIEWBOX.width
+  const vh = WAREHOUSE_VIEWBOX.height
+  const scaleX = (vw - 2 * PADDING) / (bounds.width || 1)
+  const scaleY = (vh - 2 * PADDING) / (bounds.height || 1)
+  const scale = Math.min(scaleX, scaleY)
+
+  const offsetX = PADDING + ((vw - 2 * PADDING) - bounds.width * scale) / 2
+  const offsetY = PADDING + ((vh - 2 * PADDING) - bounds.height * scale) / 2
+
+  /** Map a real (x, y) to SVG coordinates. */
+  function toSvg(x: number, y: number): MapPoint {
+    return {
+      x: offsetX + (x - bounds.minX) * scale,
+      // Flip Y so warehouse-bottom maps to SVG-bottom
+      y: offsetY + (bounds.maxY - y) * scale,
+    }
+  }
+
+  return { toSvg, scale }
+}
+
+// ── location lookup ───────────────────────────────────────────
+
+/**
+ * Resolve a location code to SVG coordinates.
+ *
+ * For real location codes (e.g. "A-01-01", "B-03-01") the coordinates come
+ * from the `locations` list returned by the backend.
+ * "DOCK" and "STAGE" are resolved to fixed positions at the bottom-left
+ * of the warehouse (kept as fallbacks).
+ */
+export function locationToSvgXY(
+  locationCode: string,
+  locations: WarehouseLocation[],
+  toSvg: (x: number, y: number) => MapPoint,
+  bounds: WarehouseBounds,
+): MapPoint | null {
+  const code = locationCode.trim().toUpperCase()
+
+  // Special well-known positions (warehouse-space coords)
+  if (code === 'DOCK') {
+    return toSvg(bounds.minX, bounds.minY)
+  }
+  if (code === 'STAGE') {
+    return toSvg(bounds.minX + bounds.width * 0.15, bounds.minY)
+  }
+
+  // Real location lookup
+  const loc = locations.find((l) => l.location_code.toUpperCase() === code)
+  if (loc && loc.x_coordinate != null && loc.y_coordinate != null) {
+    return toSvg(loc.x_coordinate, loc.y_coordinate)
+  }
+
+  return null
+}
+
+// ── route helpers ─────────────────────────────────────────────
+
+/** Straight-line distance of a polyline in SVG units. */
+export function polylineLength(points: MapPoint[]) {
+  let sum = 0
+  for (let i = 0; i < points.length - 1; i++) {
+    const dx = points[i + 1].x - points[i].x
+    const dy = points[i + 1].y - points[i].y
+    sum += Math.hypot(dx, dy)
+  }
+  return sum
+}
+
+/** Approximate "step" count shown in the UI. */
+export function routeSteps(route: MapPoint[]) {
+  return Math.max(0, Math.round(polylineLength(route) / 20))
 }
 
 export function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n))
 }
+
