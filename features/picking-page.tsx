@@ -206,21 +206,6 @@ export default function PickingPage() {
             </div>
           </div>
 
-          {/* Progress Bar */}
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                {order.pickedItems}/{order.totalItems} items picked
-              </span>
-              <span className="font-semibold text-foreground">{progress}%</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-secondary">
-              <div
-                className="h-full bg-primary transition-all duration-500 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
         </div>
       </header>
 
@@ -446,24 +431,30 @@ export default function PickingPage() {
             <p className="text-xl font-semibold text-foreground">{order.totalItems - order.pickedItems}</p>
           </div>
 
-          <Button
-            onClick={handleFinishOrder}
-            size="lg"
-            disabled={!allPicked}
-            className={cn('h-12 flex-1 rounded-xl', !allPicked && 'opacity-60')}
-          >
-            {allPicked ? (
-              <>
-                <CheckCircle2 className="mr-2 h-5 w-5" />
-                Finish Order
-              </>
-            ) : (
-              <>
-                <AlertCircle className="mr-2 h-5 w-5" />
-                Complete All Tasks First
-              </>
-            )}
-          </Button>
+          {allPicked ? (
+            <Button onClick={handleFinishOrder} size="lg" className="h-12 flex-1 rounded-xl">
+              <CheckCircle2 className="mr-2 h-5 w-5" />
+              Finish Order
+            </Button>
+          ) : (
+            <div
+              className="h-12 flex-1 rounded-xl border border-border bg-card/50 px-4 py-2"
+              aria-label="Picking progress"
+            >
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <span>
+                  {order.pickedItems}/{order.totalItems} picked
+                </span>
+                <span className="font-semibold text-foreground">{progress}%</span>
+              </div>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-secondary">
+                <div
+                  className="h-full bg-primary transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
