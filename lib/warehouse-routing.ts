@@ -1,203 +1,110 @@
-import { MOCK_AISLE_X, MOCK_CROSS_Y, MOCK_WAREHOUSE_VIEWBOX } from '@/components/mock-warehouse-floorplan'
+/**
+ * Warehouse routing – uses the backend navigation API.
+ *
+ * Instead of an in-browser A* graph, routing is delegated to the
+ * backend `/navigation/path/code/{from}/{to}` endpoint which uses
+ * Dijkstra over the real corridor network stored in PostGIS.
+ *
+ * This module exposes helpers consumed by the `WarehouseRouteNavigator`.
+ */
 
-export type MapPoint = { x: number; y: number }
+import { fetchNavigationPath, type NavigationPath } from '@/lib/api'
+import type { MapPoint } from '@/lib/warehouse-nav'
 
-type NodeId = string
+// ── Types ─────────────────────────────────────────────────────
 
-type GraphNode = {
-  id: NodeId
-  x: number
-  y: number
-  neighbors: NodeId[]
+/** A location code that identifies either a real location or a special zone. */
+const SPECIAL_LOCATIONS = new Set(['DOCK', 'STAGE'])
+
+export function isSpecialLocation(code: string): boolean {
+  return SPECIAL_LOCATIONS.has(code.trim().toUpperCase())
 }
 
-type Graph = {
-  nodes: Record<NodeId, GraphNode>
+// ── Path cache ────────────────────────────────────────────────
+
+const pathCache = new Map<string, NavigationPath>()
+
+function cacheKey(from: string, to: string) {
+  return `${from.toUpperCase()}::${to.toUpperCase()}`
 }
 
-function nodeId(x: number, y: number) {
-  return `${x},${y}`
+/**
+ * Fetch the navigation path between two **real** location codes.
+ * Results are cached in-memory for the duration of the session.
+ */
+export async function fetchCachedPath(
+  fromCode: string,
+  toCode: string,
+): Promise<NavigationPath | null> {
+  const key = cacheKey(fromCode, toCode)
+  const cached = pathCache.get(key)
+  if (cached) return cached
+
+  try {
+    const path = await fetchNavigationPath(fromCode, toCode)
+    pathCache.set(key, path)
+    return path
+  } catch (err) {
+    console.warn(`[routing] failed to fetch path ${fromCode} → ${toCode}`, err)
+    return null
+  }
 }
 
-function dist(a: MapPoint, b: MapPoint) {
-  return Math.hypot(a.x - b.x, a.y - b.y)
+// ── Build a full multi-stop route ─────────────────────────────
+
+export interface RouteSegmentInput {
+  locationCode: string
 }
 
-function manhattan(a: MapPoint, b: MapPoint) {
-  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
-}
-
-function buildMockGraph(): Graph {
-  const nodes: Record<NodeId, GraphNode> = {}
-
-  // intersection nodes
-  for (const x of MOCK_AISLE_X) {
-    for (const y of MOCK_CROSS_Y) {
-      const id = nodeId(x, y)
-      nodes[id] = { id, x, y, neighbors: [] }
-    }
+/**
+ * Build the complete polyline for a chain of location codes by fetching
+ * the real path between each consecutive pair from the backend.
+ *
+ * @param codes  Ordered list of location codes (e.g. ["DOCK", "LOC-001", "STAGE", "LOC-002", "STAGE"])
+ * @param toSvg  A function that maps warehouse (x, y) → SVG (x, y)
+ * @param locationLookup  A function that resolves a code → SVG point (for special locations / fallback)
+ * @returns Polyline of SVG points
+ */
+export async function buildRealRoute(
+  codes: string[],
+  toSvg: (x: number, y: number) => MapPoint,
+  locationLookup: (code: string) => MapPoint | null,
+): Promise<MapPoint[]> {
+  if (codes.length === 0) return []
+  if (codes.length === 1) {
+    const pt = locationLookup(codes[0])
+    return pt ? [pt] : []
   }
 
-  // connect vertical neighbors per aisle
-  for (const x of MOCK_AISLE_X) {
-    const ys = [...MOCK_CROSS_Y].sort((a, b) => a - b)
-    for (let i = 0; i < ys.length - 1; i++) {
-      const a = nodeId(x, ys[i])
-      const b = nodeId(x, ys[i + 1])
-      nodes[a].neighbors.push(b)
-      nodes[b].neighbors.push(a)
-    }
-  }
+  const result: MapPoint[] = []
 
-  // connect horizontal neighbors per cross-aisle
-  for (const y of MOCK_CROSS_Y) {
-    const xs = [...MOCK_AISLE_X].sort((a, b) => a - b)
-    for (let i = 0; i < xs.length - 1; i++) {
-      const a = nodeId(xs[i], y)
-      const b = nodeId(xs[i + 1], y)
-      nodes[a].neighbors.push(b)
-      nodes[b].neighbors.push(a)
-    }
-  }
+  for (let i = 0; i < codes.length - 1; i++) {
+    const fromCode = codes[i]
+    const toCode = codes[i + 1]
+    const fromSpecial = isSpecialLocation(fromCode)
+    const toSpecial = isSpecialLocation(toCode)
 
-  // connect dock/stage access points to nearest cross-aisle
-  const dockAccess: MapPoint = { x: 120, y: 510 }
-  const stageAccess: MapPoint = { x: 250, y: 510 }
-  for (const p of [dockAccess, stageAccess]) {
-    const id = nodeId(p.x, p.y)
-    if (!nodes[id]) nodes[id] = { id, x: p.x, y: p.y, neighbors: [] }
-  }
-
-  return { nodes }
-}
-
-const GRAPH = buildMockGraph()
-
-export function nearestGraphNodeId(point: MapPoint): NodeId {
-  let bestId: NodeId | null = null
-  let best = Number.POSITIVE_INFINITY
-
-  for (const id of Object.keys(GRAPH.nodes)) {
-    const n = GRAPH.nodes[id]
-    const d = dist(point, n)
-    if (d < best) {
-      best = d
-      bestId = id
-    }
-  }
-
-  return bestId ?? nodeId(MOCK_AISLE_X[0], MOCK_CROSS_Y[0])
-}
-
-export function astarPath(startId: NodeId, goalId: NodeId): MapPoint[] {
-  if (startId === goalId) {
-    const n = GRAPH.nodes[startId]
-    return [{ x: n.x, y: n.y }]
-  }
-
-  const open = new Set<NodeId>([startId])
-  const cameFrom = new Map<NodeId, NodeId>()
-  const gScore = new Map<NodeId, number>([[startId, 0]])
-  const fScore = new Map<NodeId, number>([[startId, heuristic(startId, goalId)]])
-
-  function lowestF(): NodeId {
-    let bestId = startId
-    let bestVal = Number.POSITIVE_INFINITY
-    for (const id of open) {
-      const v = fScore.get(id) ?? Number.POSITIVE_INFINITY
-      if (v < bestVal) {
-        bestVal = v
-        bestId = id
+    // If both endpoints are real locations → fetch the backend path
+    if (!fromSpecial && !toSpecial) {
+      const pathData = await fetchCachedPath(fromCode, toCode)
+      if (pathData?.geometry?.coordinates?.length) {
+        const svgCoords = pathData.geometry.coordinates.map(([x, y]) => toSvg(x, y))
+        // Avoid duplicating the junction point between segments
+        const startIdx = result.length > 0 ? 1 : 0
+        for (let j = startIdx; j < svgCoords.length; j++) {
+          result.push(svgCoords[j])
+        }
+        continue
       }
     }
-    return bestId
+
+    // Fallback: straight line via the coordinate lookup
+    const fromPt = locationLookup(fromCode)
+    const toPt = locationLookup(toCode)
+    if (fromPt && result.length === 0) result.push(fromPt)
+    if (toPt) result.push(toPt)
   }
 
-  while (open.size > 0) {
-    const current = lowestF()
-    if (current === goalId) return reconstruct(cameFrom, current)
-
-    open.delete(current)
-    const currentNode = GRAPH.nodes[current]
-    if (!currentNode) continue
-
-    for (const nb of currentNode.neighbors) {
-      const nbNode = GRAPH.nodes[nb]
-      if (!nbNode) continue
-
-      const tentativeG = (gScore.get(current) ?? Number.POSITIVE_INFINITY) + dist(currentNode, nbNode)
-      const prevG = gScore.get(nb) ?? Number.POSITIVE_INFINITY
-
-      if (tentativeG < prevG) {
-        cameFrom.set(nb, current)
-        gScore.set(nb, tentativeG)
-        fScore.set(nb, tentativeG + heuristic(nb, goalId))
-        open.add(nb)
-      }
-    }
-  }
-
-  // fallback: no path (shouldn't happen in this mock)
-  const a = GRAPH.nodes[startId]
-  const b = GRAPH.nodes[goalId]
-  return a && b ? [{ x: a.x, y: a.y }, { x: b.x, y: b.y }] : []
+  return result
 }
 
-function heuristic(aId: NodeId, bId: NodeId) {
-  const a = GRAPH.nodes[aId]
-  const b = GRAPH.nodes[bId]
-  if (!a || !b) return 0
-  return manhattan(a, b)
-}
-
-function reconstruct(cameFrom: Map<NodeId, NodeId>, current: NodeId): MapPoint[] {
-  const path: NodeId[] = [current]
-  while (cameFrom.has(current)) {
-    current = cameFrom.get(current) as NodeId
-    path.push(current)
-  }
-  path.reverse()
-
-  return path
-    .map((id) => GRAPH.nodes[id])
-    .filter(Boolean)
-    .map((n) => ({ x: n.x, y: n.y }))
-}
-
-export function clampToViewBox(p: MapPoint): MapPoint {
-  return {
-    x: Math.max(0, Math.min(MOCK_WAREHOUSE_VIEWBOX.width, p.x)),
-    y: Math.max(0, Math.min(MOCK_WAREHOUSE_VIEWBOX.height, p.y)),
-  }
-}
-
-export function routeBetweenPoints(start: MapPoint, end: MapPoint): MapPoint[] {
-  const s = clampToViewBox(start)
-  const e = clampToViewBox(end)
-
-  const startNode = nearestGraphNodeId(s)
-  const endNode = nearestGraphNodeId(e)
-
-  const core = astarPath(startNode, endNode)
-
-  // include real endpoints for nicer UX
-  const points: MapPoint[] = [s]
-
-  for (const p of core) {
-    const last = points[points.length - 1]
-    if (!last || last.x !== p.x || last.y !== p.y) points.push(p)
-  }
-
-  const last = points[points.length - 1]
-  if (!last || last.x !== e.x || last.y !== e.y) points.push(e)
-
-  return points
-}
-
-export function polylineLength(points: MapPoint[]) {
-  let sum = 0
-  for (let i = 0; i < points.length - 1; i++) {
-    sum += dist(points[i], points[i + 1])
-  }
-  return sum
-}

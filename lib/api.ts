@@ -289,3 +289,134 @@ export async function fetchPalletInstructions(orderId: number): Promise<PalletDa
     throw error
   }
 }
+
+// ============================================================
+// Navigation / Warehouse Map API
+// ============================================================
+
+/** GeoJSON geometry coming back from the backend. */
+export interface GeoJsonGeometry {
+  type: string
+  coordinates: number[] | number[][] | number[][][]
+}
+
+/** A corridor in the warehouse map. */
+export interface MapCorridor {
+  corridor_id: number
+  name: string
+  geometry: GeoJsonGeometry | null
+}
+
+/** A shelf in the warehouse map. */
+export interface MapShelf {
+  shelf_id: number
+  name: string
+  geometry: GeoJsonGeometry | null
+}
+
+/** A connection (shelf → corridor link). */
+export interface MapConnection {
+  connection_id: number
+  shelf_id: number
+  corridor_id: number
+  geometry: GeoJsonGeometry | null
+}
+
+/** A connection point on a corridor. */
+export interface MapConnectionPoint {
+  connection_point_id: number
+  corridor_id: number
+  geometry: GeoJsonGeometry | null
+}
+
+/** Full warehouse map payload. */
+export interface WarehouseMapData {
+  corridors: MapCorridor[]
+  shelves: MapShelf[]
+  connections: MapConnection[]
+  connection_points: MapConnectionPoint[]
+}
+
+/** A location record with coordinates. */
+export interface WarehouseLocation {
+  location_id: number
+  location_code: string
+  shelf_id: number | null
+  x_coordinate: number | null
+  y_coordinate: number | null
+  location_type: string | null
+  is_active: boolean
+}
+
+/** Locations response. */
+export interface WarehouseLocationsResponse {
+  locations: WarehouseLocation[]
+  total: number
+}
+
+/** Navigation path between two locations. */
+export interface NavigationPath {
+  from_location_code?: string
+  to_location_code?: string
+  from_shelf_id: number
+  to_shelf_id: number
+  total_distance: number
+  num_segments: number
+  geometry: { type: 'LineString'; coordinates: number[][] }
+  wkt?: string
+  cached: boolean
+}
+
+/**
+ * Fetch the warehouse map (corridors, shelves, connections, connection points).
+ */
+export async function fetchWarehouseMap(): Promise<WarehouseMapData> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/navigation/map`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch warehouse map: ${response.statusText}`)
+    }
+    return await response.json()
+  } catch (error) {
+    console.error('[API] Error fetching warehouse map:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch all warehouse locations (with x/y coordinates and shelf links).
+ */
+export async function fetchNavigationLocations(): Promise<WarehouseLocationsResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/navigation/locations`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch locations: ${response.statusText}`)
+    }
+    return await response.json()
+  } catch (error) {
+    console.error('[API] Error fetching navigation locations:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch the shortest navigation path between two locations by their codes.
+ */
+export async function fetchNavigationPath(
+  fromCode: string,
+  toCode: string
+): Promise<NavigationPath> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/navigation/path/code/${encodeURIComponent(fromCode)}/${encodeURIComponent(toCode)}`
+    )
+    if (!response.ok) {
+      throw new Error(`Failed to fetch path ${fromCode} → ${toCode}: ${response.statusText}`)
+    }
+    return await response.json()
+  } catch (error) {
+    console.error(`[API] Error fetching path ${fromCode} → ${toCode}:`, error)
+    throw error
+  }
+}
+
