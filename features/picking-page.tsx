@@ -199,7 +199,7 @@ export default function PickingPage() {
 
   const currentLocation = pickedTasks
     .slice()
-    .sort((a, b) => b.sequence - a.sequence)[0]?.location ?? 'A-01-01'
+    .sort((a, b) => b.sequence - a.sequence)[0]?.location ?? 'DOCK'
 
   const submitReport = () => {
     const message = issueMessage.trim()

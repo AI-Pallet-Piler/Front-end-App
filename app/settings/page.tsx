@@ -99,26 +99,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Pallet Building Preview (Coming Soon) */}
-          <Card className="border-2 border-dashed border-border">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Info className="h-6 w-6 text-muted-foreground" />
-                Upcoming Feature
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 rounded-lg bg-muted p-6 text-center">
-                <p className="text-lg font-bold text-foreground">
-                  Pallet Building Preview
-                </p>
-                <p className="text-base text-muted-foreground">
-                  3D pallet stacking visualization coming soon
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Actions */}
           <div className="space-y-3 pt-4">
             <Button

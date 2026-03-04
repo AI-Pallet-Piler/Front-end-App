@@ -69,7 +69,7 @@ function getLocations(): Promise<WarehouseLocation[]> {
 
 function dotColor(kind: WarehouseGridPoint['kind'], active: boolean) {
   if (active) return 'var(--primary)'
-  if (kind === 'start') return 'var(--muted-foreground)'
+  if (kind === 'start') return '#22c55e'
   if (kind === 'place') return 'var(--accent)'
   return 'var(--primary)'
 }
@@ -217,11 +217,25 @@ export function WarehouseRouteNavigator({
                   </>
                 )}
 
-                {/* Start dot */}
+                {/* Start dot + label */}
                 {pointsData && (
                   <>
+                    <circle cx={pointsData.start.x} cy={pointsData.start.y} r="9" fill={dotColor('start', false)} opacity="0.2" />
                     <circle cx={pointsData.start.x} cy={pointsData.start.y} r="7" fill={dotColor('start', false)} />
                     <circle cx={pointsData.start.x} cy={pointsData.start.y} r="3" fill="var(--background)" opacity="0.9" />
+                    <text
+                      x={pointsData.start.x}
+                      y={pointsData.start.y - 13}
+                      textAnchor="middle"
+                      fontSize="9"
+                      fontWeight="700"
+                      fill="#22c55e"
+                      stroke="var(--background)"
+                      strokeWidth="3"
+                      paintOrder="stroke"
+                    >
+                      START
+                    </text>
                   </>
                 )}
 
@@ -248,6 +262,22 @@ export function WarehouseRouteNavigator({
 
         {/* Stop list */}
         <div className="space-y-2">
+          {/* Origin / start point */}
+          <div className="rounded-xl border border-border bg-muted/20 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-foreground truncate">Start</div>
+                <div className="text-xs text-muted-foreground truncate">{currentLocation}</div>
+              </div>
+              <Badge
+                variant="outline"
+                className="rounded-full border-green-500/50 text-green-600 dark:text-green-400"
+              >
+                Origin
+              </Badge>
+            </div>
+          </div>
+
           {visibleStops.map((s, idx) => {
             const active = Boolean(activeStopId && s.id === activeStopId) || (!activeStopId && idx === 0)
             return (
